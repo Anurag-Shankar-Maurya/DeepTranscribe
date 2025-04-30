@@ -1,7 +1,10 @@
-# DeepGram Web3 Transcriber
+# DeepTranscribe
+
+[GitHub Repository](https://github.com/Anurag-Shankar-Maurya/DeepTranscribe)
 
 ## Project Overview
-DeepGram Web3 Transcriber is a Django-based web application that provides advanced transcription and chatbot services powered by AI. It integrates with OpenAI and Deepgram APIs to offer features such as transcript management, intelligent chat assistance, sentiment analysis, entity extraction, timeline generation, and transcript summarization. The application supports real-time transcription, user authentication, and export of transcripts in multiple formats (JSON, TXT, PDF).
+DeepTranscribe is a Django-based web application that provides advanced transcription and chatbot services powered by AI. It integrates with OpenAI and Deepgram APIs to offer features such as transcript management, intelligent chat assistance, sentiment analysis, entity extraction, timeline generation, and transcript summarization. The application supports real-time transcription, user authentication, and export of transcripts in multiple formats (JSON, TXT, PDF).
+
 
 ## Features
 - User registration, login, and profile management
@@ -24,15 +27,26 @@ DeepGram Web3 Transcriber is a Django-based web application that provides advanc
 ### Setup Steps
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
-   cd DeepGramWeb3-main
+   git clone https://github.com/Anurag-Shankar-Maurya/DeepTranscribe.git
+   cd DeepTranscribe
    ```
 
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+2. Create a virtual environment:
+   - On Unix or MacOS:
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     ```
+   - On Windows CMD:
+     ```cmd
+     python -m venv venv
+     venv\Scripts\activate.bat
+     ```
+   - On Windows PowerShell:
+     ```powershell
+     python -m venv venv
+     venv\Scripts\Activate.ps1
+     ```
 
 3. Install dependencies:
    ```bash
@@ -45,7 +59,7 @@ DeepGram Web3 Transcriber is a Django-based web application that provides advanc
    SECRET_KEY=your_django_secret_key
    DEBUG=True
    ALLOWED_HOSTS=localhost,127.0.0.1
-   DATABASE_URL=postgres://user:password@localhost:5432/dbname
+   DATABASE_URL=sqlite:///db.sqlite3
    DEEPGRAM_API_KEY=your_deepgram_api_key
    OPENAI_API_KEY=your_openai_api_key
    ```
@@ -68,10 +82,14 @@ DeepGram Web3 Transcriber is a Django-based web application that provides advanc
 ## Running the Application
 
 ### Development Server
-Start the Django development server with ASGI support:
+
+You can run the development server using either Daphne (ASGI) or the standard Django runserver command.
+
+- Using Django's built-in development server:
 ```bash
-daphne -p 8000 transcriber.asgi:application
+python manage.py runserver
 ```
+
 Then open your browser at `http://localhost:8000`.
 
 ### Usage
@@ -80,6 +98,7 @@ Then open your browser at `http://localhost:8000`.
 - Manage your transcripts: view, edit, delete, and export.
 - Use the AI chatbot assistant to query transcript data and get intelligent responses.
 - View your user profile and manage your Deepgram API key information.
+daphne -p 8000 transcriber.asgi:application
 
 ## Project Structure
 - `api/`: Contains chatbot service, API views, serializers, models, and utilities.
@@ -106,13 +125,3 @@ See `requirements.txt` for a full list of Python packages used, including:
 - OpenAI Python client
 - ReportLab for PDF generation
 - Psycopg2 for PostgreSQL
-
-## Contributing
-Contributions are welcome! Please fork the repository and submit pull requests for improvements or bug fixes.
-
-## License
-This project is licensed under the MIT License.
-
----
-
-For any questions or support, please contact the project maintainer.
