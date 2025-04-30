@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Transcribe Audio{% endblock %}
+
+{% block extra_head %}
+<script src="{% static 'js/transcribe.js' %}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-5xl mx-auto">
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Real-time Transcription</h1>
+            <p class="text-gray-600">Speak into your microphone to start transcribing. The transcription will appear below in real-time.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Sidebar with controls -->
+            <div class="md:col-span-1">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Settings</h2>
+
+                    <div class="mb-4">
+                        <label for="transcript-title" class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                        <input type="text" id="transcript-title" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Untitled Transcript">
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="model" class="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                        <select id="model" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <!-- Will be populated by JavaScript -->
+                        </select>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="language" class="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                        <select id="language" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <!-- Will be populated by JavaScript -->
+                        </select>
+                    </div>
+
+                    <div class="space-y-3 mb-6">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="diarize" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" checked>
+                            <label for="diarize" class="ml-2 block text-sm text-gray-700">Speaker Diarization</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="punctuate" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" checked>
+                            <label for="punctuate" class="ml-2 block text-sm text-gray-700">Punctuation</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="numerals" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" checked>
+                            <label for="numerals" class="ml-2 block text-sm text-gray-700">Convert Numerals</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="smart_format" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" checked>
+                            <label for="smart_format" class="ml-2 block text-sm text-gray-700">Smart Formatting</label>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col space-y-3">
+                        <button id="start-recording" class="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors">
+                            Start Recording
+                        </button>
+                        <button id="stop-recording" class="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors" disabled>
+                            Stop Recording
+                        </button>
+                    </div>
+
+                    <div class="mt-4 text-sm text-gray-600">
+                        <p id="status">Ready to record</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main content area with transcript -->
+            <div class="md:col-span-2">
+                <div class="bg-white rounded-lg shadow-md p-6 h-full flex flex-col">
+                    <div class="mb-4">
+                        <h2 class="text-xl font-semibold text-gray-900">Transcript</h2>
+                    </div>
+
+                    <!-- Audio visualizer -->
+                    <div class="mb-4 bg-gray-900 rounded-lg p-2 h-24 flex items-center justify-center">
+                        <canvas id="audio-visualizer" class="w-full h-20"></canvas>
+                    </div>
+
+                    <!-- Error message -->
+                    <div id="error-message" class="mb-4 p-3 bg-error-100 text-error-800 rounded-md hidden"></div>
+
+                    <!-- Transcript content -->
+                    <div id="transcript-container" class="flex-1 overflow-y-auto bg-gray-50 rounded-lg p-4 min-h-[300px]">
+                        <p class="text-gray-500 text-center mt-10">Start recording to see the transcript appear here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
