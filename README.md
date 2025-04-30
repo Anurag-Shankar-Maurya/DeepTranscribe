@@ -1,7 +1,5 @@
 # DeepTranscribe
 
-[GitHub Repository](https://github.com/Anurag-Shankar-Maurya/DeepTranscribe)
-
 ## Project Overview
 DeepTranscribe is a Django-based web application that provides advanced transcription and chatbot services powered by AI. It integrates with OpenAI and Deepgram APIs to offer features such as transcript management, intelligent chat assistance, sentiment analysis, entity extraction, timeline generation, and transcript summarization. The application supports real-time transcription, user authentication, and export of transcripts in multiple formats (JSON, TXT, PDF).
 
