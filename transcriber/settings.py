@@ -150,7 +150,14 @@ DEEPGRAM_API_KEY = env('DEEPGRAM_API_KEY')
 # OpenAI API key
 OPENAI_API_KEY = env('OPENAI_API_KEY')
 
+# Pinecone settings
+PINECONE_API_KEY = env('PINECONE_API_KEY')
+PINECONE_ENVIRONMENT = env('PINECONE_ENVIRONMENT')
+PINECONE_INDEX_NAME = env('PINECONE_INDEX_NAME')
+
 # Authentication settings
 LOGIN_URL = '/users/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+
+OPENAI_MODEL = "gpt-4"  # or "gpt-3.5-turbo" for a more economical option

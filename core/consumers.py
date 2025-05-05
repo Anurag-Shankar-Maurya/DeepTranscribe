@@ -7,11 +7,11 @@ import websocket
 import pyaudio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from django.conf import settings as django_settings
+from django.conf import settings
 from .models import Transcript, TranscriptSegment, TranscriptSettings
+from api.chatbot_service import ChatbotService
 
 logger = logging.getLogger(__name__)
-
 
 class TranscribeConsumer(AsyncWebsocketConsumer):
     """WebSocket consumer for real-time transcription using Deepgram WebSocket API."""
@@ -27,16 +27,17 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
         super().__init__(*args, **kwargs)
         self.ws = None
         self.ws_thread = None
-        self.ws_ready = False  # Flag to track WebSocket readiness
+        self.ws_ready = False
         self.transcript_id = None
         self.speaker_mapping = {}
         self.speaker_counter = 0
         self.current_speaker = None
         self.streaming_active = False
-        self.loop = None  # Will hold reference to the consumer's event loop
+        self.loop = None
         self.audio_thread = None
         self.pyaudio_instance = None
         self.audio_stream = None
+        self.chatbot_service = None
 
     async def connect(self):
         self.user = self.scope["user"]
@@ -44,8 +45,8 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        # Capture the event loop when connection is established
         self.loop = asyncio.get_running_loop()
+        self.chatbot_service = ChatbotService(self.user)
         await self.accept()
         logger.info(f"WebSocket connection established for user {self.user.username}")
 
@@ -55,7 +56,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
             self.ws.close()
             self.ws = None
 
-        # Make sure to stop audio stream
         self.stop_audio_stream()
 
         if self.transcript_id:
@@ -79,7 +79,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
         self.transcript_id = await self.create_transcript(title, settings_data)
         transcript_settings = await self.get_transcript_settings(self.transcript_id)
 
-        # Build Deepgram WebSocket URL with parameters
         features = {
             "diarize": str(transcript_settings.diarize).lower(),
             "punctuate": str(transcript_settings.punctuate).lower(),
@@ -94,7 +93,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
         feature_params = "&".join([f"{key}={value}" for key, value in features.items()])
         deepgram_url = f"{base_url}&{feature_params}"
 
-        # Validate Deepgram API key
         deepgram_api_key = os.getenv('DEEPGRAM_API_KEY')
         if not deepgram_api_key:
             logger.error("DEEPGRAM_API_KEY is not set")
@@ -109,7 +107,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
         def on_open(ws):
             logger.info("Deepgram WebSocket connection opened")
             self.ws_ready = True
-            # Start audio streaming when WebSocket is ready
             self.start_audio_stream(ws)
 
         def on_message(ws, message):
@@ -166,7 +163,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
         self.ws_thread = threading.Thread(target=self.ws.run_forever, daemon=True)
         self.ws_thread.start()
 
-        # Wait for WebSocket to be ready (timeout after 5 seconds)
         timeout = 5
         start_time = asyncio.get_event_loop().time()
         while not self.ws_ready:
@@ -187,7 +183,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
     def start_audio_stream(self, ws):
         """Start the audio streaming in a separate thread."""
         if self.audio_thread and self.audio_thread.is_alive():
-            # A thread is already running
             return
 
         self.audio_thread = threading.Thread(
@@ -256,7 +251,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
                 self.ws = None
                 self.ws_ready = False
 
-            # Stop audio stream
             self.stop_audio_stream()
 
             if self.transcript_id:
@@ -288,6 +282,18 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
 
             segment_id = await self.create_transcript_segment(
                 self.transcript_id, text, mapped_speaker, start_time, end_time, confidence
+            )
+
+            # Store in Pinecone
+            await self.loop.run_in_executor(
+                None,
+                self.chatbot_service.store_transcript_segment,
+                str(segment_id),
+                str(self.transcript_id),
+                text,
+                str(mapped_speaker) if mapped_speaker is not None else "Unknown",
+                start_time,
+                end_time
             )
 
             await self.send(text_data=json.dumps({
