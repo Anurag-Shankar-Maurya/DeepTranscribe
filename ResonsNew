@@ -1,0 +1,53 @@
+server {
+    listen 80;
+    server_name resons.dev www.resons.dev;
+    return 301 https://resons.dev$request_uri;  # Redirect all HTTP traffic to HTTPS non-www
+}
+
+server {
+    listen 443 ssl;
+    server_name resons.dev www.resons.dev;  # Support both resons.dev and www.resons.dev
+
+    ssl_certificate /etc/letsencrypt/live/resons.dev/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/resons.dev/privkey.pem;
+
+    # Improve SSL security
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH;
+
+    location /static/ {
+        alias /root/prProject-OTD/Resons/staticfiles/;  # Updated root directory name
+    }
+
+    location /media/ {
+        root /root/prProject-OTD/Resons/text_manage_app/media;  # Updated root directory name
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 90s;
+    }
+
+    location /ws/ {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";  # Corrected to lowercase
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 90s;
+        proxy_cache_bypass $http_upgrade;
+        proxy_buffering off;
+    }
+
+    error_log /var/log/nginx/resons_error.log debug;  # Enable debug logging
+    access_log /var/log/nginx/resons_access.log;
+}

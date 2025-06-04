@@ -86,7 +86,10 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
             "smart_format": str(transcript_settings.smart_format).lower(),
             "interim_results": "false",
             "endpointing": "100",
-            "vad_events": "true"
+            "paragraphs": "true",
+            "vad_events": "true",
+            "filler_words": "true",
+            "sentiment": "true",
         }
         base_url = f"wss://api.deepgram.com/v1/listen?model={transcript_settings.model}&language={transcript_settings.language}"
         base_url += f"&encoding={self.AUDIO_ENCODING}&sample_rate={self.SAMPLE_RATE}&channels={self.CHANNELS}"
