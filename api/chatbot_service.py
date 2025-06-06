@@ -17,29 +17,30 @@ class ChatbotService:
         self.user = user
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         self.system_instruction = self._get_system_instruction()
-        self.similarity_threshold = 0.7  # Higher threshold for better relevance
-        self.max_context_segments = 10  # Limit context size for performance
+        self.similarity_threshold = 0.6  # Balanced threshold
+        self.max_context_segments = 15  # More context for better responses
 
     def _get_system_instruction(self):
-        return """You are an intelligent assistant specialized in analyzing and answering questions about transcripts and conversations. 
+        return """You are an intelligent assistant specialized in helping users analyze and understand their personal transcripts and conversations.
 
 Your capabilities include:
-- Answering questions about specific transcript content
+- Listing and counting user's transcripts
 - Providing summaries and insights from transcripts
 - Identifying speakers and their contributions
 - Extracting key topics and themes
-- Analyzing sentiment and tone
-- Finding specific information across multiple sessions
+- Finding specific information across transcript sessions
+- Analyzing conversation patterns and statistics
 
 Guidelines:
-1. Always base your answers on the provided transcript context
-2. If information isn't available in the transcripts, clearly state this
-3. When referencing specific content, mention which transcript or speaker it came from
-4. Be concise but comprehensive in your responses
-5. Maintain user privacy - only access transcripts belonging to the current user
-6. For general questions not related to transcripts, provide helpful general answers
+1. Always base your answers on the provided transcript data for this specific user
+2. When listing transcripts, provide clear details like title, date, duration, and status
+3. For content searches, reference which transcript the information came from
+4. Be conversational and helpful in your responses
+5. If no relevant transcript data is found, clearly explain this to the user
+6. Provide specific numbers, dates, and details when available
+7. Use bullet points and clear formatting for better readability
 
-Remember: You only have access to transcripts and chat history for the current user."""
+Remember: You have access to this user's transcript data and should provide specific, helpful responses based on their actual data."""
 
     def get_embeddings(self, text: str) -> List[float]:
         """Get embeddings for a given text using OpenAI's API"""
@@ -69,10 +70,27 @@ Remember: You only have access to transcripts and chat history for the current u
             
         return np.dot(vec1, vec2) / (norm1 * norm2)
 
-    def get_relevant_transcript_content(self, query: str, limit: int = 10) -> List[Dict]:
-        """
-        Retrieve relevant transcript segments for the current user only
-        """
+    def get_user_transcripts(self, limit: int = None) -> List[Dict]:
+        """Get user's transcripts with metadata"""
+        query = Transcript.objects.filter(user=self.user).order_by('-created_at')
+        if limit:
+            query = query[:limit]
+        
+        transcripts = []
+        for transcript in query:
+            transcripts.append({
+                'id': transcript.id,
+                'title': transcript.title,
+                'created_at': transcript.created_at,
+                'duration': transcript.duration,
+                'is_complete': transcript.is_complete,
+                'segment_count': transcript.segments.count()
+            })
+        
+        return transcripts
+
+    def get_relevant_transcript_content(self, query: str, limit: int = 15) -> List[Dict]:
+        """Retrieve relevant transcript segments for the current user only"""
         query_embedding = self.get_embeddings(query)
         if not query_embedding:
             return []
@@ -107,37 +125,27 @@ Remember: You only have access to transcripts and chat history for the current u
         relevant_segments.sort(key=lambda x: x['similarity'], reverse=True)
         return relevant_segments[:limit]
 
-    def get_recent_chat_context(self, limit: int = 5) -> List[Dict]:
-        """
-        Get recent chat messages for context (user's messages only)
-        """
-        recent_messages = ChatMessage.objects.filter(
-            user=self.user
-        ).order_by('-timestamp')[:limit * 2]  # Get more to account for back-and-forth
-
-        context = []
-        for msg in reversed(recent_messages):
-            context.append({
-                'role': msg.role,
-                'content': msg.content,
-                'timestamp': msg.timestamp
-            })
-        
-        return context
-
     def analyze_query_intent(self, query: str) -> Dict[str, any]:
-        """
-        Analyze the user's query to determine intent and extract parameters
-        """
+        """Analyze the user's query to determine intent and extract parameters"""
         query_lower = query.lower()
         
         # Check for specific commands/intents
         intent_patterns = {
+            'count_transcripts': [
+                r'how many.*transcripts?',
+                r'count.*transcripts?',
+                r'number.*transcripts?',
+                r'how many.*sessions?',
+                r'count.*sessions?'
+            ],
             'list_transcripts': [
                 r'list.*transcripts?',
                 r'show.*transcripts?',
                 r'what transcripts?',
-                r'my transcripts?'
+                r'my transcripts?',
+                r'latest.*transcripts?',
+                r'recent.*transcripts?',
+                r'give me.*transcripts?'
             ],
             'summarize': [
                 r'summar[iy]ze?',
@@ -157,13 +165,6 @@ Remember: You only have access to transcripts and chat history for the current u
                 r'who.*talk',
                 r'who.*speak',
                 r'participants?'
-            ],
-            'time_based': [
-                r'recent',
-                r'last.*days?',
-                r'yesterday',
-                r'this week',
-                r'today'
             ]
         }
         
@@ -176,67 +177,79 @@ Remember: You only have access to transcripts and chat history for the current u
             if detected_intent != 'general':
                 break
         
-        # Extract time references
-        time_match = re.search(r'last (\d+) (days?|weeks?|months?)', query_lower)
-        time_filter = None
-        if time_match:
-            num = int(time_match.group(1))
-            unit = time_match.group(2).rstrip('s')
-            if unit == 'day':
-                time_filter = datetime.now() - timedelta(days=num)
-            elif unit == 'week':
-                time_filter = datetime.now() - timedelta(weeks=num)
-            elif unit == 'month':
-                time_filter = datetime.now() - timedelta(days=num*30)
+        # Extract numbers for "latest X transcripts"
+        number_match = re.search(r'latest (\d+)|(\d+) transcripts?|(\d+) sessions?', query_lower)
+        limit = None
+        if number_match:
+            limit = int(number_match.group(1) or number_match.group(2) or number_match.group(3))
         
         return {
             'intent': detected_intent,
-            'time_filter': time_filter,
+            'limit': limit,
             'original_query': query
         }
 
-    def handle_list_transcripts(self, intent_data: Dict) -> str:
-        """Handle requests to list transcripts"""
-        query_filter = Q(user=self.user)
+    def handle_count_transcripts(self) -> str:
+        """Handle requests to count transcripts"""
+        total_count = Transcript.objects.filter(user=self.user).count()
+        completed_count = Transcript.objects.filter(user=self.user, is_complete=True).count()
+        in_progress_count = total_count - completed_count
         
-        if intent_data['time_filter']:
-            query_filter &= Q(created_at__gte=intent_data['time_filter'])
+        response = f"📊 **Your Transcript Statistics:**\n\n"
+        response += f"• **Total transcripts:** {total_count}\n"
+        response += f"• **Completed:** {completed_count}\n"
+        response += f"• **In progress:** {in_progress_count}\n"
         
-        transcripts = Transcript.objects.filter(query_filter).order_by('-created_at')[:20]
-        
-        if not transcripts.exists():
-            return "You don't have any transcripts yet. Start by creating a new transcript session."
-        
-        response = "Here are your transcripts:\n\n"
-        for i, transcript in enumerate(transcripts, 1):
-            status = "✅ Complete" if transcript.is_complete else "🔄 In Progress"
-            duration = f"{transcript.duration}s" if transcript.duration else "Unknown"
-            response += f"{i}. **{transcript.title}**\n"
-            response += f"   📅 {transcript.created_at.strftime('%Y-%m-%d %H:%M')}\n"
-            response += f"   ⏱️ Duration: {duration}\n"
-            response += f"   📊 Status: {status}\n\n"
+        if total_count > 0:
+            # Get latest transcript info
+            latest = Transcript.objects.filter(user=self.user).order_by('-created_at').first()
+            response += f"\n**Latest transcript:** {latest.title} ({latest.created_at.strftime('%Y-%m-%d %H:%M')})"
         
         return response
 
-    def handle_summarize_request(self, intent_data: Dict) -> str:
+    def handle_list_transcripts(self, limit: int = None) -> str:
+        """Handle requests to list transcripts"""
+        transcripts = self.get_user_transcripts(limit)
+        
+        if not transcripts:
+            return "📝 You don't have any transcripts yet. Start by creating a new transcript session!"
+        
+        response = f"📋 **Your Transcripts"
+        if limit:
+            response += f" (Latest {min(limit, len(transcripts))})"
+        response += ":**\n\n"
+        
+        for i, transcript in enumerate(transcripts, 1):
+            status = "✅ Complete" if transcript['is_complete'] else "🔄 In Progress"
+            duration = f"{transcript['duration']}s" if transcript['duration'] else "Unknown"
+            
+            response += f"**{i}. {transcript['title']}**\n"
+            response += f"   📅 {transcript['created_at'].strftime('%Y-%m-%d %H:%M')}\n"
+            response += f"   ⏱️ Duration: {duration}\n"
+            response += f"   📊 Status: {status}\n"
+            response += f"   💬 Segments: {transcript['segment_count']}\n\n"
+        
+        return response
+
+    def handle_summarize_request(self, limit: int = 5) -> str:
         """Handle summarization requests"""
-        # Get recent transcripts for summarization
-        query_filter = Q(user=self.user)
-        if intent_data['time_filter']:
-            query_filter &= Q(created_at__gte=intent_data['time_filter'])
+        transcripts = self.get_user_transcripts(limit)
         
-        transcripts = Transcript.objects.filter(query_filter).order_by('-created_at')[:5]
-        
-        if not transcripts.exists():
-            return "No transcripts found to summarize."
+        if not transcripts:
+            return "📝 No transcripts found to summarize."
         
         # Collect transcript content
         transcript_content = []
-        for transcript in transcripts:
+        for transcript_info in transcripts:
+            transcript = Transcript.objects.get(id=transcript_info['id'])
             segments = transcript.segments.all().order_by('start_time')[:20]  # Limit segments
-            content = f"Transcript: {transcript.title} ({transcript.created_at.strftime('%Y-%m-%d')})\n"
-            content += "\n".join([f"Speaker {seg.speaker}: {seg.text}" for seg in segments])
-            transcript_content.append(content)
+            if segments:
+                content = f"Transcript: {transcript.title} ({transcript.created_at.strftime('%Y-%m-%d')})\n"
+                content += "\n".join([f"Speaker {seg.speaker}: {seg.text}" for seg in segments])
+                transcript_content.append(content)
+        
+        if not transcript_content:
+            return "📝 No transcript content available to summarize."
         
         combined_content = "\n\n---\n\n".join(transcript_content)
         
@@ -251,21 +264,17 @@ Remember: You only have access to transcripts and chat history for the current u
                 max_tokens=800,
                 temperature=0.3
             )
-            return response.choices[0].message.content.strip()
+            return "📋 **Summary of Your Recent Transcripts:**\n\n" + response.choices[0].message.content.strip()
         except Exception as e:
             logger.error(f"Error generating summary: {e}")
-            return "I encountered an error while generating the summary. Please try again."
+            return "❌ I encountered an error while generating the summary. Please try again."
 
-    def handle_speaker_analysis(self, intent_data: Dict) -> str:
+    def handle_speaker_analysis(self) -> str:
         """Handle speaker-related queries"""
-        query_filter = Q(transcript__user=self.user)
-        if intent_data['time_filter']:
-            query_filter &= Q(transcript__created_at__gte=intent_data['time_filter'])
-        
-        segments = TranscriptSegment.objects.filter(query_filter)
+        segments = TranscriptSegment.objects.filter(transcript__user=self.user)
         
         if not segments.exists():
-            return "No transcript segments found for speaker analysis."
+            return "📝 No transcript segments found for speaker analysis."
         
         # Analyze speaker activity
         speaker_stats = {}
@@ -286,7 +295,7 @@ Remember: You only have access to transcripts and chat history for the current u
             total_segments += 1
         
         # Format response
-        response = "Speaker Analysis:\n\n"
+        response = "🎤 **Speaker Analysis:**\n\n"
         for speaker_id, stats in sorted(speaker_stats.items(), key=lambda x: x[1]['segments'], reverse=True):
             percentage = (stats['segments'] / total_segments) * 100
             avg_words = stats['total_words'] / stats['segments'] if stats['segments'] > 0 else 0
@@ -321,12 +330,14 @@ Remember: You only have access to transcripts and chat history for the current u
             intent_data = self.analyze_query_intent(user_message)
             
             # Handle specific intents
-            if intent_data['intent'] == 'list_transcripts':
-                response = self.handle_list_transcripts(intent_data)
+            if intent_data['intent'] == 'count_transcripts':
+                response = self.handle_count_transcripts()
+            elif intent_data['intent'] == 'list_transcripts':
+                response = self.handle_list_transcripts(intent_data.get('limit'))
             elif intent_data['intent'] == 'summarize':
-                response = self.handle_summarize_request(intent_data)
+                response = self.handle_summarize_request()
             elif intent_data['intent'] == 'speaker_analysis':
-                response = self.handle_speaker_analysis(intent_data)
+                response = self.handle_speaker_analysis()
             else:
                 # Handle general queries with transcript context
                 response = self._handle_contextual_query(user_message, intent_data)
@@ -349,8 +360,8 @@ Remember: You only have access to transcripts and chat history for the current u
             return response
             
         except Exception as e:
-            logger.error(f"Error generating response: {e}")
-            return "I encountered an error while processing your request. Please try again."
+            logger.error(f"Error generating response for user {self.user.id}: {e}")
+            return "❌ I encountered an error while processing your request. Please try again."
 
     def _handle_contextual_query(self, user_message: str, intent_data: Dict) -> str:
         """Handle general queries with transcript context"""
@@ -369,13 +380,19 @@ Remember: You only have access to transcripts and chat history for the current u
         
         # Add relevant transcript context
         if relevant_segments:
-            context_text = "Relevant transcript content:\n\n"
+            context_text = "Here are the relevant transcript segments for this user:\n\n"
             for segment in relevant_segments:
                 context_text += f"From '{segment['transcript_title']}' ({segment['transcript_date'].strftime('%Y-%m-%d')}):\n"
                 context_text += f"Speaker {segment['speaker']}: {segment['text']}\n"
                 context_text += f"Time: {segment['start_time']:.1f}s - {segment['end_time']:.1f}s\n\n"
             
             messages.append({"role": "system", "content": context_text})
+        else:
+            # Add user stats if no relevant content found
+            stats = self.get_user_transcript_stats()
+            if stats['total_transcripts'] > 0:
+                stats_text = f"User has {stats['total_transcripts']} transcripts with {stats['total_segments']} total segments."
+                messages.append({"role": "system", "content": stats_text})
         
         # Add current user message
         messages.append({"role": "user", "content": user_message})
@@ -391,15 +408,35 @@ Remember: You only have access to transcripts and chat history for the current u
             
             answer = response.choices[0].message.content.strip()
             
-            # If no relevant transcript content was found, mention it
+            # If no relevant transcript content was found, provide helpful guidance
             if not relevant_segments and any(keyword in user_message.lower() for keyword in ['transcript', 'said', 'mentioned', 'discussed']):
-                answer += "\n\n*Note: I couldn't find relevant transcript content for your query. You may want to check if you have transcripts that contain this information.*"
+                stats = self.get_user_transcript_stats()
+                if stats['total_transcripts'] == 0:
+                    answer += "\n\n💡 *You don't have any transcripts yet. Start by creating a new transcript session to begin using the AI assistant features!*"
+                else:
+                    answer += f"\n\n💡 *I couldn't find relevant content in your {stats['total_transcripts']} transcripts for this specific query. Try asking about general topics or use commands like 'list my transcripts' or 'summarize my conversations'.*"
             
             return answer
             
         except Exception as e:
             logger.error(f"Error calling OpenAI API: {e}")
-            return "I'm having trouble processing your request right now. Please try again in a moment."
+            return "❌ I'm having trouble processing your request right now. Please try again in a moment."
+
+    def get_recent_chat_context(self, limit: int = 5) -> List[Dict]:
+        """Get recent chat messages for context (user's messages only)"""
+        recent_messages = ChatMessage.objects.filter(
+            user=self.user
+        ).order_by('-timestamp')[:limit * 2]  # Get more to account for back-and-forth
+
+        context = []
+        for msg in reversed(recent_messages):
+            context.append({
+                'role': msg.role,
+                'content': msg.content,
+                'timestamp': msg.timestamp
+            })
+        
+        return context
 
     def get_user_transcript_stats(self) -> Dict:
         """Get statistics about user's transcripts"""

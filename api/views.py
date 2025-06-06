@@ -108,9 +108,13 @@ class ChatbotAPIView(APIView):
             # Generate response
             answer = chatbot_service.generate_response(user_message)
             
+            # Get user stats for additional context
+            user_stats = chatbot_service.get_user_transcript_stats()
+            
             return Response({
                 'response': answer,
-                'user_stats': chatbot_service.get_user_transcript_stats()
+                'user_stats': user_stats,
+                'success': True
             })
             
         except Exception as e:
