@@ -15,6 +15,9 @@ from openai import OpenAI
 from core.models import Transcript
 from .models import ChatMessage, ChatMessageEmbedding
 from .chatbot_service import ChatbotService
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TranscriptViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing transcripts."""
@@ -76,22 +79,43 @@ def app_settings(request):
     })
 
 
-from rest_framework.views import APIView
-
 class ChatbotAPIView(APIView):
-    """API view to handle chatbot requests using OpenAI with chat memory and vector store."""
+    """API view to handle chatbot requests with improved security and performance."""
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
 
     def post(self, request, *args, **kwargs):
         user = request.user
-        user_message = request.data.get('message', '')
+        user_message = request.data.get('message', '').strip()
+        
         if not user_message:
-            return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Message is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        chatbot_service = ChatbotService(user)
+        # Validate message length
+        if len(user_message) > 2000:
+            return Response(
+                {'error': 'Message too long. Please limit to 2000 characters.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
+            # Initialize chatbot service for the specific user
+            chatbot_service = ChatbotService(user)
+            
+            # Generate response
             answer = chatbot_service.generate_response(user_message)
-            return Response({'response': answer})
+            
+            return Response({
+                'response': answer,
+                'user_stats': chatbot_service.get_user_transcript_stats()
+            })
+            
         except Exception as e:
-            import logging
+            logger.error(f"Chatbot error for user {user.id}: {str(e)}")
+            return Response(
+                {'error': 'An error occurred while processing your request. Please try again.'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
