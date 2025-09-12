@@ -9,15 +9,9 @@ from rest_framework.permissions import IsAuthenticated
 
 from core.models import Transcript, TranscriptSegment
 from .chatbot_service import ChatbotService
-<<<<<<< HEAD
-import logging
-
-logger = logging.getLogger(__name__)
-=======
 from .models import ChatMessage, ChatMessageEmbedding
 from .serializers import TranscriptSerializer, TranscriptSegmentSerializer
 
->>>>>>> 7a4076b101b0a58522b91f812aa17c56430bbdf6
 
 class TranscriptViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing transcripts."""
@@ -80,55 +74,20 @@ def app_settings(request):
 
 
 class ChatbotAPIView(APIView):
-<<<<<<< HEAD
-    """API view to handle chatbot requests with improved security and performance."""
-=======
     """API view to handle chatbot requests using Gemini API with chat memory and vector store."""
->>>>>>> 7a4076b101b0a58522b91f812aa17c56430bbdf6
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
 
     def post(self, request, *args, **kwargs):
         user = request.user
-        user_message = request.data.get('message', '').strip()
-        
+        user_message = request.data.get('message', '')
         if not user_message:
-            return Response(
-                {'error': 'Message is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validate message length
-        if len(user_message) > 2000:
-            return Response(
-                {'error': 'Message too long. Please limit to 2000 characters.'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+        chatbot_service = ChatbotService(user)
         try:
-            # Initialize chatbot service for the specific user
-            chatbot_service = ChatbotService(user)
-            
-            # Generate response
             answer = chatbot_service.generate_response(user_message)
-            
-            # Get user stats for additional context
-            user_stats = chatbot_service.get_user_transcript_stats()
-            
-            return Response({
-                'response': answer,
-                'user_stats': user_stats,
-                'success': True
-            })
-            
+            return Response({'response': answer})
         except Exception as e:
-<<<<<<< HEAD
-            logger.error(f"Chatbot error for user {user.id}: {str(e)}")
-            return Response(
-                {'error': 'An error occurred while processing your request. Please try again.'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-=======
             logging.error(f"Error in ChatbotAPIView: {e}")
             return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
->>>>>>> 7a4076b101b0a58522b91f812aa17c56430bbdf6
