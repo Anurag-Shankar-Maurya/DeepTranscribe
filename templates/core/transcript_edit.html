@@ -1,0 +1,273 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Edit Transcript{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-5xl mx-auto">
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Edit Transcript: {{ transcript.title }}</h1>
+            <p class="text-gray-600">Modify the details, settings, and segments for this transcript.</p>
+        </div>
+
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">Transcript Details</h2>
+                <div class="form-field">
+                    {{ transcript_form.title.label_tag }}
+                    {{ transcript_form.title }}
+                    {% if transcript_form.title.errors %}
+                        <ul class="errorlist">
+                            {% for error in transcript_form.title.errors %}
+                                <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">Transcript Settings</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-field">
+                        {{ settings_form.model.label_tag }}
+                        {{ settings_form.model }}
+                        {% if settings_form.model.errors %}
+                            <ul class="errorlist">
+                                {% for error in settings_form.model.errors %}
+                                    <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                    <div class="form-field">
+                        {{ settings_form.language.label_tag }}
+                        {{ settings_form.language }}
+                        {% if settings_form.language.errors %}
+                            <ul class="errorlist">
+                                {% for error in settings_form.language.errors %}
+                                    <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <div class="flex items-center">
+                        {{ settings_form.diarize }}
+                        {{ settings_form.diarize.label_tag }}
+                        {% if settings_form.diarize.errors %}
+                            <ul class="errorlist">
+                                {% for error in settings_form.diarize.errors %}
+                                    <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center">
+                        {{ settings_form.punctuate }}
+                        {{ settings_form.punctuate.label_tag }}
+                        {% if settings_form.punctuate.errors %}
+                            <ul class="errorlist">
+                                {% for error in settings_form.punctuate.errors %}
+                                    <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center">
+                        {{ settings_form.numerals }}
+                        {{ settings_form.numerals.label_tag }}
+                        {% if settings_form.numerals.errors %}
+                            <ul class="errorlist">
+                                {% for error in settings_form.numerals.errors %}
+                                    <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                </div>
+                 <div class="form-field mt-4">
+                    {{ settings_form.smart_format.label_tag }}
+                    {{ settings_form.smart_format }}
+                    {% if settings_form.smart_format.errors %}
+                        <ul class="errorlist">
+                            {% for error in settings_form.smart_format.errors %}
+                                <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">Transcript Segments</h2>
+                {{ segment_formset.management_form }}
+                {% for segment_form in segment_formset %}
+                    <div class="segment-form border border-gray-200 p-4 mb-4 rounded-md {% if segment_form.DELETE.value %}bg-red-100{% endif %}">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-3">Segment {{ forloop.counter }}</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="form-field md:col-span-2">
+                                {{ segment_form.id }} {# Hidden input for segment ID #}
+                                {{ segment_form.text.label_tag }}
+                                {{ segment_form.text }}
+                                {% if segment_form.text.errors %}
+                                    <ul class="errorlist">
+                                        {% for error in segment_form.text.errors %}
+                                            <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </div>
+                            <div class="form-field">
+                                {{ segment_form.speaker.label_tag }}
+                                {{ segment_form.speaker }}
+                                {% if segment_form.speaker.errors %}
+                                    <ul class="errorlist">
+                                        {% for error in segment_form.speaker.errors %}
+                                            <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </div>
+                            <div class="form-field">
+                                {{ segment_form.start_time.label_tag }}
+                                {{ segment_form.start_time }}
+                                {% if segment_form.start_time.errors %}
+                                    <ul class="errorlist">
+                                        {% for error in segment_form.start_time.errors %}
+                                            <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </div>
+                            <div class="form-field">
+                                {{ segment_form.end_time.label_tag }}
+                                {{ segment_form.end_time }}
+                                {% if segment_form.end_time.errors %}
+                                    <ul class="errorlist">
+                                        {% for error in segment_form.end_time.errors %}
+                                            <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </div>
+                            <div class="form-field">
+                                {{ segment_form.confidence.label_tag }}
+                                {{ segment_form.confidence }}
+                                {% if segment_form.confidence.errors %}
+                                    <ul class="errorlist">
+                                        {% for error in segment_form.confidence.errors %}
+                                            <li class="text-red-600 text-sm mt-1">{{ error }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        {% if segment_form.can_delete %}
+                            <div class="form-field mt-3">
+                                {{ segment_form.DELETE }}
+                                {{ segment_form.DELETE.label_tag }}
+                                <span class="delete-form text-red-500 cursor-pointer font-semibold ml-2" onclick="this.parentNode.querySelector('input[type=checkbox]').click()">Mark for deletion</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="form-actions text-right mt-6">
+                <button type="submit" class="px-6 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    /* Styles for fixed save button */
+    .form-actions {
+        position: fixed;
+        bottom: 10%; /* Adjust as needed */
+        /* now horizontal center */
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+        z-index: 1000; /* Ensure it's above other content */
+        background-color: rgba(255, 255, 255, 0.253); /* Background to prevent content showing through */
+        backdrop-filter: blur(2px); /* Blur effect */
+        padding: 10px 20px;
+        border-radius: 8px;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1); /* Subtle shadow */
+    }
+
+    /* Add padding to the bottom of the main content to prevent it from being hidden by the fixed button */
+    /* This value should be roughly the height of the fixed button area */
+    .container > .max-w-5xl > .mb-6 + div { /* Target the first form section after the header */
+        padding-bottom: 100px; /* Adjust based on button height */
+    }
+
+    /* Ensure textareas auto-resize */
+    textarea[id$="-text"] {
+        overflow: hidden; /* Hide scrollbars while resizing */
+        resize: none; /* Disable manual resizing */
+        min-height: 60px; /* Minimum height */
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Style for delete checkboxes
+        const deleteCheckboxes = document.querySelectorAll('input[type="checkbox"][name$="-DELETE"]');
+        deleteCheckboxes.forEach(checkbox => {
+            const segmentFormDiv = checkbox.closest('.segment-form');
+            if (checkbox.checked) {
+                segmentFormDiv.classList.add('bg-red-100'); // Apply red background if marked for deletion
+            }
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    segmentFormDiv.classList.add('bg-red-100');
+                } else {
+                    segmentFormDiv.classList.remove('bg-red-100');
+                }
+            });
+        });
+
+        // Ensure labels are correctly associated with inputs
+        document.querySelectorAll('.form-field label').forEach(label => {
+            const inputId = label.getAttribute('for');
+            if (inputId) {
+                const inputElement = document.getElementById(inputId);
+                if (inputElement) {
+                    label.style.display = 'block'; // Ensure label is block for proper spacing
+                }
+            }
+        });
+
+        // Basic styling for form fields if not already handled by Tailwind
+        document.querySelectorAll('.form-field input[type="text"], .form-field input[type="number"], .form-field textarea, .form-field select').forEach(input => {
+            input.classList.add('w-full', 'px-3', 'py-2', 'border', 'border-gray-300', 'rounded-md', 'focus:outline-none', 'focus:ring-2', 'focus:ring-primary-500');
+            if (input.type === 'checkbox') {
+                input.classList.add('h-4', 'w-4', 'text-primary-600', 'focus:ring-primary-500', 'border-gray-300', 'rounded');
+            }
+        });
+        
+        // Auto-resizing textareas
+        const textareas = document.querySelectorAll('textarea[id$="-text"]');
+        textareas.forEach(textarea => {
+            const adjustHeight = () => {
+                textarea.style.height = 'auto'; // Reset height to recalculate scrollHeight
+                textarea.style.height = textarea.scrollHeight + 'px';
+            };
+            
+            textarea.addEventListener('input', adjustHeight);
+            adjustHeight(); // Initial adjustment on load
+        });
+    });
+</script>
+{% endblock %}

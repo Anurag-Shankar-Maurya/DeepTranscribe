@@ -20,7 +20,7 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = env('ALLOWED_HOSTS')
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'deeptranscribe.in']
 
 # Application definition
 INSTALLED_APPS = [
@@ -83,7 +83,17 @@ CHANNEL_LAYERS = {
 
 # Database
 DATABASES = {
-    'default': env.db(),
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'postgres',
+        'USER': 'postgres.thqngrnaxtqrstrewabn',
+        'PASSWORD': 'E2cw9KOQcgMNksT7',
+        'HOST': 'aws-1-ap-south-1.pooler.supabase.com',
+        'PORT': '6543',
+        'OPTIONS': {
+            'sslmode': 'require',
+        }
+    }
 }
 
 # Password validation
@@ -140,15 +150,18 @@ REST_FRAMEWORK = {
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 if not DEBUG:
     CORS_ALLOWED_ORIGINS = [
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:8000",
-    ]
+    "http://localhost:5173",  # Vite dev server
+    "http://localhost:8000",
+    "https://deeptranscribe.in", # Production domain
+]
 
 # Deepgram API key
 DEEPGRAM_API_KEY = env('DEEPGRAM_API_KEY')
 
 # OpenAI API key
 OPENAI_API_KEY = env('OPENAI_API_KEY')
+# Gemini API key
+GEMINI_API_KEY = env('GEMINI_API_KEY')
 
 # Authentication settings
 LOGIN_URL = '/users/login/'

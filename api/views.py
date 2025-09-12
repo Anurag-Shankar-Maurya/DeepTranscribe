@@ -1,23 +1,23 @@
+import logging
+from django.conf import settings
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
-from django.conf import settings
-from core.models import Transcript, TranscriptSegment
-from .serializers import TranscriptSerializer, TranscriptSegmentSerializer
-from openai import OpenAI
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
-from rest_framework import status
-from django.conf import settings
-from openai import OpenAI
-from core.models import Transcript
-from .models import ChatMessage, ChatMessageEmbedding
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+
+from core.models import Transcript, TranscriptSegment
 from .chatbot_service import ChatbotService
+<<<<<<< HEAD
 import logging
 
 logger = logging.getLogger(__name__)
+=======
+from .models import ChatMessage, ChatMessageEmbedding
+from .serializers import TranscriptSerializer, TranscriptSegmentSerializer
+
+>>>>>>> 7a4076b101b0a58522b91f812aa17c56430bbdf6
 
 class TranscriptViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing transcripts."""
@@ -80,7 +80,11 @@ def app_settings(request):
 
 
 class ChatbotAPIView(APIView):
+<<<<<<< HEAD
     """API view to handle chatbot requests with improved security and performance."""
+=======
+    """API view to handle chatbot requests using Gemini API with chat memory and vector store."""
+>>>>>>> 7a4076b101b0a58522b91f812aa17c56430bbdf6
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
 
@@ -118,8 +122,13 @@ class ChatbotAPIView(APIView):
             })
             
         except Exception as e:
+<<<<<<< HEAD
             logger.error(f"Chatbot error for user {user.id}: {str(e)}")
             return Response(
                 {'error': 'An error occurred while processing your request. Please try again.'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+=======
+            logging.error(f"Error in ChatbotAPIView: {e}")
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+>>>>>>> 7a4076b101b0a58522b91f812aa17c56430bbdf6

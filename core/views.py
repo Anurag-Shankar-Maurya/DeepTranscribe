@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
 from .models import Transcript, TranscriptSegment, TranscriptSettings
+from .forms import TranscriptForm, TranscriptSettingsForm, TranscriptSegmentFormSet # Import forms
 import json
 import io
 import os
@@ -46,16 +47,34 @@ def transcript_detail(request, pk):
 def transcript_edit(request, pk):
     """Render the transcript edit page."""
     transcript = get_object_or_404(Transcript, pk=pk, user=request.user)
+    settings = transcript.settings # Get settings object
     
     if request.method == 'POST':
-        # Process form data
-        title = request.POST.get('title', '')
-        if title:
-            transcript.title = title
-            transcript.save()
+        transcript_form = TranscriptForm(request.POST, instance=transcript)
+        settings_form = TranscriptSettingsForm(request.POST, instance=settings)
+        segment_formset = TranscriptSegmentFormSet(request.POST, request.FILES, instance=transcript)
+        
+        if transcript_form.is_valid() and settings_form.is_valid() and segment_formset.is_valid():
+            transcript_form.save()
+            settings_form.save()
+            segment_formset.save()
             return redirect('core:transcript_detail', pk=transcript.pk)
+        else:
+            # If forms are invalid, re-render with errors
+            pass # Errors will be displayed automatically by the template
+    else:
+        # GET request: Initialize forms with existing data
+        transcript_form = TranscriptForm(instance=transcript)
+        settings_form = TranscriptSettingsForm(instance=settings)
+        segment_formset = TranscriptSegmentFormSet(instance=transcript)
     
-    return render(request, 'core/transcript_edit.html', {'transcript': transcript})
+    context = {
+        'transcript': transcript,
+        'transcript_form': transcript_form,
+        'settings_form': settings_form,
+        'segment_formset': segment_formset,
+    }
+    return render(request, 'core/transcript_edit.html', context)
 
 
 @login_required
