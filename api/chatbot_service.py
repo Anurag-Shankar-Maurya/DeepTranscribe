@@ -213,13 +213,13 @@ class ChatbotService:
         
         # Use Gemini chat completion
         try:
-            chat = genai.GenerativeModel('gemini-pro') # Using gemini-pro for chat completion
-            response = chat.generate_content(
-                [
-                    {"role": "system", "content": "You are a helpful assistant specialized in summarizing transcript sessions."},
-                    {"role": "user", "content": summary_prompt}
-                ]
+            model = genai.GenerativeModel(
+                'gemini-2.5-flash-lite',
+                system_instruction="You are a helpful assistant specialized in summarizing transcript sessions."
             )
+            response = model.generate_content([
+                {"role": "user", "parts": [{"text": summary_prompt}]}
+            ])
             return response.text.strip()
         except Exception as e:
             print(f"Gemini API error during summary generation: {e}")
@@ -334,54 +334,62 @@ class ChatbotService:
         """Handle general questions using vector search and context"""
         # Store user message and get embedding
         user_chat_msg = ChatMessage.objects.create(
-            user=self.user, 
-            role='user', 
+            user=self.user,
+            role='user',
             content=user_message
         )
         user_embedding = self.get_embeddings(user_message)
         if user_embedding is None:
             return "I'm sorry, I encountered an error generating embeddings for your message. Please try again later."
-        
+
         ChatMessageEmbedding.objects.create(
-            chat_message=user_chat_msg, 
+            chat_message=user_chat_msg,
             embedding=user_embedding
         )
-        
+
         # Get relevant content from both chats and transcripts
         relevant_chats, relevant_transcripts = self.get_relevant_content(user_message)
-        
+
         # Prepare context for the LLM
-        # Gemini API uses a slightly different structure for messages
-        messages = [{"role": "system", "content": self.system_instruction}]
-        
-        # Add relevant transcript segments as context
-        for seg in relevant_transcripts:
-            context = (
-                f"Transcript Context from '{seg['transcript_title']}' (Speaker {seg['speaker']} at {seg['start_time']}s): "
-                f"{seg['text']}"
-            )
-            messages.append({"role": "system", "content": context})
-        
+        messages = []
+
+        # Add system instruction as the first message
+        messages.append({"role": "model", "parts": [{"text": self.system_instruction}]})
+
         # Add relevant chat history
         for chat in relevant_chats:
-            messages.append({"role": chat['role'], "content": chat['content']})
-        
-        # Add the current user message
-        messages.append({"role": "user", "content": user_message})
-        
+            role = 'model' if chat['role'] == 'assistant' else 'user'
+            messages.append({"role": role, "parts": [{"text": chat['content']}]})
+
+        # Construct a single user message with all context
+        context_string = ""
+        if relevant_transcripts:
+            context_string = "Here is some relevant context from your transcripts:\n"
+            for seg in relevant_transcripts:
+                context_string += (
+                    f"- From '{seg['transcript_title']}' (Speaker {seg['speaker']} at {seg['start_time']}s): "
+                    f'"{seg["text"]}"\n'
+                )
+            context_string += "\n"
+
+        final_user_message = f"{context_string}My question is: {user_message}"
+        messages.append({"role": "user", "parts": [{"text": final_user_message}]})
+
         # Generate response using Gemini chat completion
         try:
-            chat = genai.GenerativeModel('gemini-2.5-flash-lite') # Using gemini-pro for chat completion
-            response = chat.generate_content(messages)
+            model = genai.GenerativeModel(
+                'gemini-2.5-flash-lite',
+            )
+            response = model.generate_content(messages)
             answer = response.text.strip()
         except Exception as e:
             print(f"Gemini API error during general question answering: {e}")
             return "I'm sorry, I encountered an error while processing your request. Please try again later."
-        
+
         # Store assistant response
         assistant_chat_msg = ChatMessage.objects.create(
-            user=self.user, 
-            role='assistant', 
+            user=self.user,
+            role='assistant',
             content=answer
         )
         assistant_embedding = self.get_embeddings(answer)
@@ -389,8 +397,8 @@ class ChatbotService:
             print("Warning: Could not generate embedding for assistant's response.")
         else:
             ChatMessageEmbedding.objects.create(
-                chat_message=assistant_chat_msg, 
+                chat_message=assistant_chat_msg,
                 embedding=assistant_embedding
             )
-        
+
         return answer

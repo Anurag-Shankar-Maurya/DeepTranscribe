@@ -1,18 +1,17 @@
+import logging
+from django.conf import settings
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
-from django.conf import settings
-from core.models import Transcript, TranscriptSegment
-from .serializers import TranscriptSerializer, TranscriptSegmentSerializer
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
-from rest_framework import status
-from django.conf import settings
-from core.models import Transcript
-from .models import ChatMessage, ChatMessageEmbedding
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+
+from core.models import Transcript, TranscriptSegment
 from .chatbot_service import ChatbotService
+from .models import ChatMessage, ChatMessageEmbedding
+from .serializers import TranscriptSerializer, TranscriptSegmentSerializer
+
 
 class TranscriptViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing transcripts."""
@@ -74,8 +73,6 @@ def app_settings(request):
     })
 
 
-from rest_framework.views import APIView
-
 class ChatbotAPIView(APIView):
     """API view to handle chatbot requests using Gemini API with chat memory and vector store."""
     permission_classes = [IsAuthenticated]
@@ -92,4 +89,5 @@ class ChatbotAPIView(APIView):
             answer = chatbot_service.generate_response(user_message)
             return Response({'response': answer})
         except Exception as e:
-            import logging
+            logging.error(f"Error in ChatbotAPIView: {e}")
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
