@@ -7,10 +7,12 @@ from api.utils import generate_embedding
 def create_transcript_embedding(sender, instance, created, **kwargs):
     if created:
         embedding = generate_embedding(instance.title)
-        TranscriptEmbedding.objects.create(transcript=instance, embedding=embedding)
+        if embedding is not None:
+            TranscriptEmbedding.objects.create(transcript=instance, embedding=embedding)
 
 @receiver(post_save, sender=TranscriptSegment)
 def create_segment_embedding(sender, instance, created, **kwargs):
     if created:
         embedding = generate_embedding(instance.text)
-        TranscriptEmbedding.objects.create(segment=instance, embedding=embedding)
+        if embedding is not None:
+            TranscriptEmbedding.objects.create(segment=instance, embedding=embedding)

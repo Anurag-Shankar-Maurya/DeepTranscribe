@@ -1,5 +1,5 @@
 import numpy as np
-from openai import OpenAI
+import google.generativeai as genai
 from django.conf import settings
 from .models import ChatMessage, ChatMessageEmbedding
 from core.models import Transcript, TranscriptEmbedding, TranscriptSegment
@@ -11,7 +11,8 @@ from typing import List, Dict, Tuple, Optional
 class ChatbotService:
     def __init__(self, user):
         self.user = user
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        # Configure Gemini API
+        genai.configure(api_key=settings.GEMINI_API_KEY)
         self.system_instruction = (
             "You are a highly intelligent and helpful assistant with access to all transcript data and chat history. "
             "You can perform content-specific retrieval, summarization, Q&A, contextual understanding, comparative analysis, "
@@ -19,15 +20,20 @@ class ChatbotService:
             "Always answer based on the transcript and chat data available. Provide detailed, accurate, and context-aware responses. "
             "If information is not available, politely inform the user. Use the transcript segments and chat messages as your knowledge base."
         )
-        self.retrieval_threshold = 0.1  # Minimum similarity score for considering a match
+        self.retrieval_threshold = 0.3  # Minimum similarity score for considering a match
 
     def get_embeddings(self, text: str) -> List[float]:
-        """Get embeddings for a given text using OpenAI's API"""
-        response = self.client.embeddings.create(
-            input=text,
-            model="text-embedding-3-small"
-        )
-        return response.data[0].embedding
+        """Get embeddings for a given text using Gemini's API"""
+        try:
+            response = genai.embed_content(
+                model="models/gemini-embedding-001",
+                content=text,
+                task_type="SEMANTIC_SIMILARITY"
+            )
+            return response['embedding']
+        except Exception as e:
+            print(f"Gemini API error during embedding generation: {e}")
+            return None
 
     def cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """Calculate cosine similarity between two vectors"""
@@ -41,63 +47,65 @@ class ChatbotService:
         Returns tuple of (relevant_chat_messages, relevant_transcript_segments)
         """
         query_embedding = self.get_embeddings(query)
-        
+        if query_embedding is None:
+            return ([], []) # Handle case where embedding generation fails
+
         # Get relevant chat messages
         chat_messages = []
-        chat_embeddings = []
+        chat_embeddings_data = [] # Store embeddings directly for similarity calculation
         for msg in ChatMessage.objects.filter(user=self.user).order_by('timestamp'):
             try:
-                emb = msg.embedding.embedding
-                chat_embeddings.append(emb)
-                chat_messages.append({
-                    'id': msg.id,
-                    'role': msg.role,
-                    'content': msg.content,
-                    'timestamp': msg.timestamp,
-                    'type': 'chat'
-                })
+                # Assuming ChatMessageEmbedding stores embeddings compatible with Gemini
+                emb_obj = msg.embedding
+                if emb_obj and emb_obj.embedding:
+                    chat_embeddings_data.append({'embedding': emb_obj.embedding, 'message': msg})
             except ChatMessageEmbedding.DoesNotExist:
                 continue
 
         chat_similarities = []
-        if chat_embeddings:
-            chat_similarities = [self.cosine_similarity(query_embedding, emb) for emb in chat_embeddings]
+        if chat_embeddings_data:
+            chat_similarities = [self.cosine_similarity(query_embedding, item['embedding']) for item in chat_embeddings_data]
         
         # Get relevant transcript segments
         transcript_segments = []
-        transcript_embeddings = []
+        transcript_embeddings_data = [] # Store embeddings directly for similarity calculation
         for te in TranscriptEmbedding.objects.filter(
             transcript__user=self.user
         ).select_related('transcript', 'segment'):
-            if te.segment:
-                transcript_embeddings.append(te.embedding)
-                transcript_segments.append({
-                    'id': te.segment.id,
-                    'text': te.segment.text,
-                    'speaker': te.segment.speaker,
-                    'start_time': te.segment.start_time,
-                    'end_time': te.segment.end_time,
-                    'transcript_id': te.transcript.id,
-                    'transcript_title': te.transcript.title,
-                    'transcript_date': te.transcript.created_at,
-                    'type': 'transcript'
-                })
+            if te.segment and te.embedding: # Ensure segment and embedding exist
+                transcript_embeddings_data.append({'embedding': te.embedding, 'segment': te.segment, 'transcript': te.transcript})
 
         transcript_similarities = []
-        if transcript_embeddings:
-            transcript_similarities = [self.cosine_similarity(query_embedding, emb) for emb in transcript_embeddings]
+        if transcript_embeddings_data:
+            transcript_similarities = [self.cosine_similarity(query_embedding, item['embedding']) for item in transcript_embeddings_data]
         
         # Combine and sort all content by similarity
         all_content = []
-        for i, msg in enumerate(chat_messages):
+        for i, item in enumerate(chat_embeddings_data):
             all_content.append({
-                'content': msg,
+                'content': {
+                    'id': item['message'].id,
+                    'role': item['message'].role,
+                    'content': item['message'].content,
+                    'timestamp': item['message'].timestamp,
+                    'type': 'chat'
+                },
                 'similarity': chat_similarities[i] if i < len(chat_similarities) else 0
             })
         
-        for i, seg in enumerate(transcript_segments):
+        for i, item in enumerate(transcript_embeddings_data):
             all_content.append({
-                'content': seg,
+                'content': {
+                    'id': item['segment'].id,
+                    'text': item['segment'].text,
+                    'speaker': item['segment'].speaker,
+                    'start_time': item['segment'].start_time,
+                    'end_time': item['segment'].end_time,
+                    'transcript_id': item['transcript'].id,
+                    'transcript_title': item['transcript'].title,
+                    'transcript_date': item['transcript'].created_at,
+                    'type': 'transcript'
+                },
                 'similarity': transcript_similarities[i] if i < len(transcript_similarities) else 0
             })
         
@@ -142,11 +150,13 @@ class ChatbotService:
         segments = TranscriptSegment.objects.filter(transcript__user=self.user)
         if query:
             query_embedding = self.get_embeddings(query)
+            if query_embedding is None: return {query: 0} # Handle embedding failure
             topic_segments = []
             for te in TranscriptEmbedding.objects.filter(transcript__user=self.user).select_related('segment'):
-                sim = self.cosine_similarity(query_embedding, te.embedding)
-                if sim >= self.retrieval_threshold and te.segment:
-                    topic_segments.append(te.segment.text)
+                if te.embedding: # Ensure embedding exists
+                    sim = self.cosine_similarity(query_embedding, te.embedding)
+                    if sim >= self.retrieval_threshold and te.segment:
+                        topic_segments.append(te.segment.text)
             return {query: len(topic_segments)}
         else:
             # For general topic frequency, we'd ideally use topic modeling, but this is a simplified version
@@ -159,11 +169,13 @@ class ChatbotService:
         segments = TranscriptSegment.objects.filter(transcript__user=self.user)
         if topic:
             query_embedding = self.get_embeddings(topic)
+            if query_embedding is None: return [] # Handle embedding failure
             relevant_segments = []
             for te in TranscriptEmbedding.objects.filter(transcript__user=self.user).select_related('segment'):
-                sim = self.cosine_similarity(query_embedding, te.embedding)
-                if sim >= self.retrieval_threshold and te.segment:
-                    relevant_segments.append(te.segment)
+                if te.embedding: # Ensure embedding exists
+                    sim = self.cosine_similarity(query_embedding, te.embedding)
+                    if sim >= self.retrieval_threshold and te.segment:
+                        relevant_segments.append(te.segment)
             segments = relevant_segments
         
         timeline = []
@@ -199,16 +211,19 @@ class ChatbotService:
             full_text = "\n\n".join(summary_texts)
             summary_prompt = f"Please provide a comprehensive summary of all transcript sessions, highlighting key themes, decisions, and action items:\n{full_text}"
         
-        summary_response = self.client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant specialized in summarizing transcript sessions."},
-                {"role": "user", "content": summary_prompt}
-            ],
-            max_tokens=500,
-            temperature=0.7,
-        )
-        return summary_response.choices[0].message.content.strip()
+        # Use Gemini chat completion
+        try:
+            chat = genai.GenerativeModel('gemini-pro') # Using gemini-pro for chat completion
+            response = chat.generate_content(
+                [
+                    {"role": "system", "content": "You are a helpful assistant specialized in summarizing transcript sessions."},
+                    {"role": "user", "content": summary_prompt}
+                ]
+            )
+            return response.text.strip()
+        except Exception as e:
+            print(f"Gemini API error during summary generation: {e}")
+            return "An error occurred while generating the summary."
 
     def generate_response(self, user_message: str) -> str:
         """Main method to generate response to user query"""
@@ -324,6 +339,9 @@ class ChatbotService:
             content=user_message
         )
         user_embedding = self.get_embeddings(user_message)
+        if user_embedding is None:
+            return "I'm sorry, I encountered an error generating embeddings for your message. Please try again later."
+        
         ChatMessageEmbedding.objects.create(
             chat_message=user_chat_msg, 
             embedding=user_embedding
@@ -333,6 +351,7 @@ class ChatbotService:
         relevant_chats, relevant_transcripts = self.get_relevant_content(user_message)
         
         # Prepare context for the LLM
+        # Gemini API uses a slightly different structure for messages
         messages = [{"role": "system", "content": self.system_instruction}]
         
         # Add relevant transcript segments as context
@@ -350,14 +369,14 @@ class ChatbotService:
         # Add the current user message
         messages.append({"role": "user", "content": user_message})
         
-        # Generate response
-        response = self.client.chat.completions.create(
-            model="gpt-4.1-nano",
-            messages=messages,
-            max_tokens=2000,
-            temperature=0.3,
-        )
-        answer = response.choices[0].message.content.strip()
+        # Generate response using Gemini chat completion
+        try:
+            chat = genai.GenerativeModel('gemini-2.5-flash-lite') # Using gemini-pro for chat completion
+            response = chat.generate_content(messages)
+            answer = response.text.strip()
+        except Exception as e:
+            print(f"Gemini API error during general question answering: {e}")
+            return "I'm sorry, I encountered an error while processing your request. Please try again later."
         
         # Store assistant response
         assistant_chat_msg = ChatMessage.objects.create(
@@ -366,9 +385,12 @@ class ChatbotService:
             content=answer
         )
         assistant_embedding = self.get_embeddings(answer)
-        ChatMessageEmbedding.objects.create(
-            chat_message=assistant_chat_msg, 
-            embedding=assistant_embedding
-        )
+        if assistant_embedding is None:
+            print("Warning: Could not generate embedding for assistant's response.")
+        else:
+            ChatMessageEmbedding.objects.create(
+                chat_message=assistant_chat_msg, 
+                embedding=assistant_embedding
+            )
         
         return answer

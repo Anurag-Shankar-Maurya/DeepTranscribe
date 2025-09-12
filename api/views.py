@@ -4,14 +4,12 @@ from rest_framework.response import Response
 from django.conf import settings
 from core.models import Transcript, TranscriptSegment
 from .serializers import TranscriptSerializer, TranscriptSegmentSerializer
-from openai import OpenAI
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework import status
 from django.conf import settings
-from openai import OpenAI
 from core.models import Transcript
 from .models import ChatMessage, ChatMessageEmbedding
 from .chatbot_service import ChatbotService
@@ -79,7 +77,7 @@ def app_settings(request):
 from rest_framework.views import APIView
 
 class ChatbotAPIView(APIView):
-    """API view to handle chatbot requests using OpenAI with chat memory and vector store."""
+    """API view to handle chatbot requests using Gemini API with chat memory and vector store."""
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
 
