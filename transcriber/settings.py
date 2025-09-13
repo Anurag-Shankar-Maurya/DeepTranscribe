@@ -20,7 +20,17 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'deeptranscribe.in']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'deeptranscribe.in', '.vercel.app']
+
+# CORS settings
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+if not DEBUG:
+    CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # Vite dev server
+    "http://localhost:8000",
+    "https://deeptranscribe.in", # Production domain
+    ".vercel.com" # For Vercel Hosting
+]
 
 # Application definition
 INSTALLED_APPS = [
@@ -145,15 +155,6 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
 }
-
-# CORS settings
-CORS_ALLOW_ALL_ORIGINS = DEBUG
-if not DEBUG:
-    CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # Vite dev server
-    "http://localhost:8000",
-    "https://deeptranscribe.in", # Production domain
-]
 
 # Deepgram API key
 DEEPGRAM_API_KEY = env('DEEPGRAM_API_KEY')
