@@ -29,7 +29,7 @@ if not DEBUG:
     "http://localhost:5173",  # Vite dev server
     "http://localhost:8000",
     "https://deeptranscribe.in", # Production domain
-    ".vercel.com" # For Vercel Hosting
+    "https://*.vercel.app", # For Vercel Hosting
 ]
 
 # Application definition
