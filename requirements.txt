@@ -58,7 +58,7 @@ protobuf==4.25.8
 psycopg2-binary==2.9.10
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
-PyAudio==0.2.14
+# PyAudio==0.2.14  # Removed - not compatible with Vercel serverless
 pycparser==2.22
 pydantic==2.11.3
 pydantic_core==2.33.1
@@ -78,7 +78,7 @@ tomli==2.2.1
 tqdm==4.67.1
 Twisted==24.11.0
 txaio==23.1.1
-typing==3.7.4.3
+# typing==3.7.4.3  # Remove - deprecated in Python 3.12+
 typing-inspection==0.4.0
 typing_extensions==4.13.2
 tzdata==2025.2
