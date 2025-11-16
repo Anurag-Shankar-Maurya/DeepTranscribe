@@ -23,6 +23,8 @@ db.sqlite3
 db.sqlite3-journal
 media/
 redis-data/
+staticfiles/
+requirements_no_audio.txt
 
 # Environment variables
 .env
