@@ -38,17 +38,22 @@ document.addEventListener('DOMContentLoaded', () => {
   chatbotContainer.style.transition = 'transform 0.3s ease-in-out';
   chatbotContainer.style.display = 'none'; // hidden initially
 
-  // Create header with close button
+  // Create header with close button and memory selector
   const header = document.createElement('div');
   header.style.backgroundColor = '#4f46e5'; // Indigo-600
   header.style.color = 'white';
   header.style.padding = '10px';
   header.style.display = 'flex';
-  header.style.justifyContent = 'space-between';
-  header.style.alignItems = 'center';
+  header.style.flexDirection = 'column';
+
+  const headerRow = document.createElement('div');
+  headerRow.style.display = 'flex';
+  headerRow.style.justifyContent = 'space-between';
+  headerRow.style.alignItems = 'center';
+  headerRow.style.marginBottom = '8px';
 
   const title = document.createElement('div');
-  title.textContent = 'Chatbot';
+  title.textContent = 'AI Assistant (RAG)';
   title.style.fontWeight = 'bold';
   title.style.fontSize = '16px';
 
@@ -61,8 +66,53 @@ document.addEventListener('DOMContentLoaded', () => {
   closeButton.style.fontSize = '20px';
   closeButton.style.cursor = 'pointer';
 
-  header.appendChild(title);
-  header.appendChild(closeButton);
+  headerRow.appendChild(title);
+  headerRow.appendChild(closeButton);
+
+  // Memory type selector
+  const memoryRow = document.createElement('div');
+  memoryRow.style.display = 'flex';
+  memoryRow.style.alignItems = 'center';
+  memoryRow.style.gap = '8px';
+
+  const memoryLabel = document.createElement('label');
+  memoryLabel.textContent = 'Memory:';
+  memoryLabel.style.fontSize = '12px';
+  memoryLabel.style.whiteSpace = 'nowrap';
+
+  const memorySelect = document.createElement('select');
+  memorySelect.id = 'memory-type-select';
+  memorySelect.style.flex = '1';
+  memorySelect.style.padding = '4px 8px';
+  memorySelect.style.borderRadius = '4px';
+  memorySelect.style.border = 'none';
+  memorySelect.style.fontSize = '12px';
+  memorySelect.style.backgroundColor = 'white';
+  memorySelect.style.color = '#4f46e5';
+  memorySelect.style.cursor = 'pointer';
+
+  const memoryOptions = [
+    { value: 'summary_buffer', label: 'Summary Buffer (Recommended)' },
+    { value: 'buffer', label: 'Recent Messages Only' },
+    { value: 'summary', label: 'Summary Only' },
+    { value: 'graph', label: 'Knowledge Graph' }
+  ];
+
+  memoryOptions.forEach(opt => {
+    const option = document.createElement('option');
+    option.value = opt.value;
+    option.textContent = opt.label;
+    if (opt.value === 'summary_buffer') {
+      option.selected = true;
+    }
+    memorySelect.appendChild(option);
+  });
+
+  memoryRow.appendChild(memoryLabel);
+  memoryRow.appendChild(memorySelect);
+
+  header.appendChild(headerRow);
+  header.appendChild(memoryRow);
   chatbotContainer.appendChild(header);
 
   // Create messages container
@@ -162,6 +212,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const message = inputField.value.trim();
     if (!message) return;
 
+    const memoryType = document.getElementById('memory-type-select').value;
+
     addMessage(message, 'user');
     showTypingIndicator();
     inputField.value = '';
@@ -175,7 +227,10 @@ document.addEventListener('DOMContentLoaded', () => {
           'Content-Type': 'application/json',
           'X-CSRFToken': getCookie('csrftoken'),
         },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ 
+          message: message,
+          memory_type: memoryType 
+        }),
       });
 
       if (!response.ok) {

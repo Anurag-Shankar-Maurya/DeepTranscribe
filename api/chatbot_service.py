@@ -3,14 +3,17 @@ import google.generativeai as genai
 from django.conf import settings
 from .models import ChatMessage, ChatMessageEmbedding
 from core.models import Transcript, TranscriptEmbedding, TranscriptSegment
+from .memory_manager import MemoryManager, MemoryType
 from collections import Counter
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 
 class ChatbotService:
-    def __init__(self, user):
+    def __init__(self, user, memory_type=MemoryType.SUMMARY_BUFFER):
         self.user = user
+        self.memory_type = memory_type
+        self.memory_manager = MemoryManager(user, memory_type)
         # Configure Gemini API
         genai.configure(api_key=settings.GEMINI_API_KEY)
         self.system_instruction = (
@@ -331,7 +334,7 @@ class ChatbotService:
         return None
 
     def _answer_general_question(self, user_message: str) -> str:
-        """Handle general questions using vector search and context"""
+        """Handle general questions using vector search, RAG and memory context"""
         # Store user message and get embedding
         user_chat_msg = ChatMessage.objects.create(
             user=self.user,
@@ -347,8 +350,11 @@ class ChatbotService:
             embedding=user_embedding
         )
 
-        # Get relevant content from both chats and transcripts
+        # Get relevant content from both chats and transcripts using RAG
         relevant_chats, relevant_transcripts = self.get_relevant_content(user_message)
+
+        # Get memory context from memory manager
+        memory_context = self.memory_manager.get_context()
 
         # Prepare context for the LLM
         messages = []
@@ -356,23 +362,25 @@ class ChatbotService:
         # Add system instruction as the first message
         messages.append({"role": "model", "parts": [{"text": self.system_instruction}]})
 
-        # Add relevant chat history
-        for chat in relevant_chats:
-            role = 'model' if chat['role'] == 'assistant' else 'user'
-            messages.append({"role": role, "parts": [{"text": chat['content']}]})
-
-        # Construct a single user message with all context
+        # Construct context with memory and RAG results
         context_string = ""
+        
+        # Add memory context
+        if memory_context:
+            context_string += memory_context + "\n"
+        
+        # Add relevant transcript context from RAG
         if relevant_transcripts:
-            context_string = "Here is some relevant context from your transcripts:\n"
+            context_string += "Relevant context from your transcripts (RAG retrieval):\n"
             for seg in relevant_transcripts:
                 context_string += (
-                    f"- From '{seg['transcript_title']}' (Speaker {seg['speaker']} at {seg['start_time']}s): "
+                    f"- From '{seg['transcript_title']}' ({seg['transcript_date'].strftime('%Y-%m-%d')})\n"
+                    f"  Speaker {seg['speaker']} at {int(seg['start_time']//60)}m {int(seg['start_time']%60)}s: "
                     f'"{seg["text"]}"\n'
                 )
             context_string += "\n"
 
-        final_user_message = f"{context_string}My question is: {user_message}"
+        final_user_message = f"{context_string}Current question: {user_message}"
         messages.append({"role": "user", "parts": [{"text": final_user_message}]})
 
         # Generate response using Gemini chat completion
@@ -402,3 +410,8 @@ class ChatbotService:
             )
 
         return answer
+    
+    def set_memory_type(self, memory_type: str):
+        """Change the memory type for the chatbot"""
+        self.memory_type = memory_type
+        self.memory_manager.set_memory_type(memory_type)

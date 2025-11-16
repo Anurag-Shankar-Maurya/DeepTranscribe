@@ -74,20 +74,25 @@ def app_settings(request):
 
 
 class ChatbotAPIView(APIView):
-    """API view to handle chatbot requests using Gemini API with chat memory and vector store."""
+    """API view to handle chatbot requests using Gemini API with advanced memory and vector store."""
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
 
     def post(self, request, *args, **kwargs):
         user = request.user
         user_message = request.data.get('message', '')
+        memory_type = request.data.get('memory_type', 'summary_buffer')  # default to summary_buffer
+        
         if not user_message:
             return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        chatbot_service = ChatbotService(user)
+        chatbot_service = ChatbotService(user, memory_type=memory_type)
         try:
             answer = chatbot_service.generate_response(user_message)
-            return Response({'response': answer})
+            return Response({
+                'response': answer,
+                'memory_type': memory_type
+            })
         except Exception as e:
             logging.error(f"Error in ChatbotAPIView: {e}")
             return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

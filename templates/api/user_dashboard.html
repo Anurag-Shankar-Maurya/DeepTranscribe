@@ -1,0 +1,246 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}User Dashboard - DeepTranscribe{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Welcome, {{ user.first_name|default:user.username }}!</h1>
+        <p class="text-gray-600">Your comprehensive transcription and chat analytics dashboard</p>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Total Transcripts -->
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-primary-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 mb-1">Total Transcripts</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ total_transcripts }}</p>
+                </div>
+                <div class="bg-primary-100 p-3 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Duration -->
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-accent-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 mb-1">Total Duration</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ total_duration_hours }}h</p>
+                    <p class="text-xs text-gray-500">{{ total_duration_minutes }} minutes</p>
+                </div>
+                <div class="bg-accent-100 p-3 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-accent-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Segments -->
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-success-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 mb-1">Total Segments</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ total_segments }}</p>
+                </div>
+                <div class="bg-success-100 p-3 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-success-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Messages -->
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-warning-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 mb-1">Chat Messages</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ total_chat_messages }}</p>
+                    <p class="text-xs text-gray-500">{{ user_messages }} user / {{ assistant_messages }} bot</p>
+                </div>
+                <div class="bg-warning-100 p-3 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-warning-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <!-- Transcripts Over Time Chart -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Transcripts Over Time (Last 30 Days)</h2>
+            <canvas id="transcriptsChart" height="200"></canvas>
+        </div>
+
+        <!-- Speaker Activity Chart -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Top 10 Speaker Activity</h2>
+            <canvas id="speakersChart" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- Recent Transcripts -->
+    <div class="bg-white rounded-lg shadow p-6 mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold text-gray-900">Recent Transcripts</h2>
+            <a href="{% url 'core:transcript_list' %}" class="text-primary-600 hover:text-primary-700 font-medium">
+                View All →
+            </a>
+        </div>
+        
+        {% if recent_transcripts %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for transcript in recent_transcripts %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900">{{ transcript.title }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-500">{{ transcript.created_at|date:"M d, Y" }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-500">{% widthratio transcript.duration 60 1 %}m</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if transcript.is_complete %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-success-100 text-success-800">
+                                Complete
+                            </span>
+                            {% else %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-warning-100 text-warning-800">
+                                In Progress
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <a href="{% url 'api:transcript_detail_enhanced' transcript.id %}" class="text-primary-600 hover:text-primary-900 mr-3">
+                                View Details
+                            </a>
+                            <a href="{% url 'core:transcript_detail' transcript.id %}" class="text-accent-600 hover:text-accent-900">
+                                Standard View
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No transcripts yet</h3>
+            <p class="mt-1 text-sm text-gray-500">Get started by creating your first transcript.</p>
+            <div class="mt-6">
+                <a href="{% url 'core:transcribe' %}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    New Transcript
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    // Transcripts Over Time Chart
+    const transcriptsData = {{ transcripts_by_date|safe }};
+    const transcriptDates = transcriptsData.map(item => new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    const transcriptCounts = transcriptsData.map(item => item.count);
+
+    const transcriptsCtx = document.getElementById('transcriptsChart').getContext('2d');
+    new Chart(transcriptsCtx, {
+        type: 'line',
+        data: {
+            labels: transcriptDates,
+            datasets: [{
+                label: 'Transcripts Created',
+                data: transcriptCounts,
+                borderColor: 'rgb(12, 165, 233)',
+                backgroundColor: 'rgba(12, 165, 233, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+
+    // Speaker Activity Chart
+    const speakersData = {{ speaker_stats|safe }};
+    const speakerLabels = speakersData.map(item => `Speaker ${item.speaker}`);
+    const speakerCounts = speakersData.map(item => item.segment_count);
+
+    const speakersCtx = document.getElementById('speakersChart').getContext('2d');
+    new Chart(speakersCtx, {
+        type: 'bar',
+        data: {
+            labels: speakerLabels,
+            datasets: [{
+                label: 'Segments',
+                data: speakerCounts,
+                backgroundColor: 'rgba(56, 152, 243, 0.8)',
+                borderColor: 'rgb(56, 152, 243)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}
