@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ transcript.title }} - Enhanced View{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">{{ transcript.title }}</h1>
+                <p class="text-gray-600">Created on {{ transcript.created_at|date:"F d, Y at H:i" }}</p>
+            </div>
+            <div class="flex gap-2">
+                <a href="{% url 'core:transcript_detail' transcript.id %}" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">
+                    Standard View
+                </a>
+                <a href="{% url 'core:transcript_list' %}" class="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">
+                    Back to List
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white rounded-lg shadow p-4 border-l-4 border-primary-500">
+            <p class="text-sm text-gray-600">Duration</p>
+            <p class="text-2xl font-bold text-gray-900">{{ total_minutes }}m</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4 border-l-4 border-accent-500">
+            <p class="text-sm text-gray-600">Segments</p>
+            <p class="text-2xl font-bold text-gray-900">{{ segments.count }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4 border-l-4 border-success-500">
+            <p class="text-sm text-gray-600">Total Words</p>
+            <p class="text-2xl font-bold text-gray-900">{{ total_words }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4 border-l-4 border-warning-500">
+            <p class="text-sm text-gray-600">Avg Confidence</p>
+            <p class="text-2xl font-bold text-gray-900">{{ avg_confidence }}%</p>
+        </div>
+    </div>
+
+    <!-- Speaker Distribution Chart -->
+    <div class="bg-white rounded-lg shadow p-6 mb-8">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Speaker Distribution</h2>
+        <canvas id="speakerChart" height="80"></canvas>
+    </div>
+
+    <!-- Minute-by-Minute Breakdown -->
+    <div class="bg-white rounded-lg shadow p-6 mb-8">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Minute-by-Minute Breakdown</h2>
+        <div class="space-y-4">
+            {% for minute, data in minute_data.items %}
+            <div class="border-l-4 border-primary-500 pl-4 py-2">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-semibold text-gray-900">Minute {{ minute }}</h3>
+                    <span class="text-sm text-gray-500">
+                        Speakers: {{ data.speakers|join:", " }}
+                    </span>
+                </div>
+                <div class="text-sm text-gray-600 mb-2">
+                    <span class="mr-4">{{ data.segments|length }} segments</span>
+                    <span class="mr-4">{{ data.total_words }} words</span>
+                    <span>{{ data.duration|floatformat:1 }}s</span>
+                </div>
+                <div class="space-y-2">
+                    {% for seg in data.segments %}
+                    <div class="bg-gray-50 p-2 rounded text-sm">
+                        <span class="font-medium text-primary-600">Speaker {{ seg.speaker }}:</span>
+                        {{ seg.text }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+    // Speaker Distribution Chart
+    const speakerData = {{ speaker_distribution|safe }};
+    const speakerLabels = speakerData.map(item => `Speaker ${item.speaker || 'Unknown'}`);
+    const speakerCounts = speakerData.map(item => item.count);
+
+    const ctx = document.getElementById('speakerChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: speakerLabels,
+            datasets: [{
+                label: 'Number of Segments',
+                data: speakerCounts,
+                backgroundColor: 'rgba(56, 152, 243, 0.8)',
+                borderColor: 'rgb(56, 152, 243)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

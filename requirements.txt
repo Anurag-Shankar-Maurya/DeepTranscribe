@@ -16,7 +16,8 @@ Django==5.2.6
 django-cors-headers==4.8.0
 django-environ==0.12.0
 djangorestframework==3.16.1
-google-ai-generativelanguage==0.6.15
+faiss-cpu==1.12.0
+google-ai-generativelanguage==0.9.0
 google-api-core==2.25.1
 google-api-python-client==2.181.0
 google-auth==2.40.3
@@ -29,6 +30,10 @@ httplib2==0.31.0
 hyperlink==21.0.0
 idna==3.10
 incremental==24.7.2
+langchain==1.0.7
+langchain-core==1.0.5
+langchain-google-genai==3.0.3
+langgraph==1.0.3
 numpy==2.3.3
 pillow==11.3.0
 proto-plus==1.26.1
@@ -36,7 +41,6 @@ protobuf==5.29.5
 psycopg2-binary==2.9.10
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
-PyAudio==0.2.14
 pycparser==2.23
 pydantic==2.11.9
 pydantic_core==2.33.2
@@ -49,6 +53,7 @@ rsa==4.9.1
 service-identity==24.2.0
 setuptools==80.9.0
 sqlparse==0.5.3
+tenacity==9.1.2
 tqdm==4.67.1
 Twisted==25.5.0
 txaio==25.6.1

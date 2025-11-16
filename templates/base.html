@@ -110,6 +110,10 @@
                        class="px-3 py-2 text-gray-700 hover:text-primary-600 transition-colors">Transcribe</a>
                     <a href="{% url 'core:transcript_list' %}"
                        class="px-3 py-2 text-gray-700 hover:text-primary-600 transition-colors">My Transcripts</a>
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'api:user_dashboard' %}"
+                       class="px-3 py-2 text-gray-700 hover:text-primary-600 transition-colors">Dashboard</a>
+                    {% endif %}
                 </div>
             </div>
 

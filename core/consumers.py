@@ -4,7 +4,15 @@ import logging
 import os
 import threading
 import websocket
-import pyaudio
+
+# PyAudio is optional - only needed for audio streaming
+try:
+    import pyaudio
+    PYAUDIO_AVAILABLE = True
+except ImportError:
+    PYAUDIO_AVAILABLE = False
+    pyaudio = None
+    
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.conf import settings as django_settings
@@ -20,7 +28,7 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
     SAMPLE_RATE = 16000
     CHANNELS = 1
     CHUNK_SIZE = 4096
-    FORMAT = pyaudio.paInt16
+    FORMAT = pyaudio.paInt16 if PYAUDIO_AVAILABLE else None
     AUDIO_ENCODING = "linear16"
 
     def __init__(self, *args, **kwargs):
