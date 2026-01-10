@@ -134,7 +134,7 @@
                                         <div class="text-[10px] font-mono text-gray-400 flex items-center gap-2">
                                             <span>{{ segment.start_time|floatformat:"1" }}s - {{ segment.end_time|floatformat:"1" }}s</span>
                                             {% if segment.confidence %}
-                                            <span class="inline-block bg-green-100 text-green-700 px-1 rounded" title="Confidence Score">{{ segment.confidence }}%</span>
+                                            <span class="inline-block bg-green-100 text-green-700 px-1 rounded" title="Confidence Score">{% widthratio segment.confidence 1 100 %}%</span>
                                             {% endif %}
                                         </div>
                                     </div>
