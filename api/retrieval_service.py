@@ -77,7 +77,7 @@ class AdvancedRetrievalService:
         """
         try:
             response = self.client.models.generate_content(
-                model='gemini-2.0-flash-exp', # Use a fast model for routing
+                model='gemma-3-27b-it', # Use a fast model for routing
                 contents=prompt,
                 config={'response_mime_type': 'application/json'}
             )
