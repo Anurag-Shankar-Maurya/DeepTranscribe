@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import threading
+import ssl
 import websocket
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
@@ -35,16 +36,19 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
         self.user = self.scope["user"]
+        logger.info(f"WebSocket connect attempt - User: {self.user}, Authenticated: {self.user.is_authenticated}")
         if not self.user.is_authenticated:
+            logger.warning(f"Rejecting WebSocket connection - user not authenticated")
             await self.close()
             return
 
         # Capture the event loop when connection is established
         self.loop = asyncio.get_running_loop()
         await self.accept()
-        logger.info(f"WebSocket connection established for user {self.user.username}")
+        logger.info(f"✓ WebSocket connection accepted for user {self.user.username}")
 
     async def disconnect(self, close_code):
+        logger.info(f"WebSocket disconnect - Code: {close_code}, User: {getattr(self, 'user', 'unknown')}")
         self.streaming_active = False
         if self.ws:
             self.ws.close()
@@ -52,7 +56,7 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
 
         if self.transcript_id:
             await self.update_transcript_status(self.transcript_id, True)
-        logger.info(f"WebSocket connection closed for user {self.user.username}")
+        logger.info(f"✓ WebSocket disconnected")
 
     async def receive(self, text_data=None, bytes_data=None):
         if text_data:
@@ -60,24 +64,50 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
             command = data.get('command')
 
             if command == 'start_transcription':
+                logger.info(f"Received start_transcription command")
                 title = data.get('title', 'Untitled Transcript')
                 settings_data = data.get('settings', {})
                 await self.start_transcription(title, settings_data)
 
             elif command == 'stop_transcription':
+                logger.info(f"Received stop_transcription command")
                 await self.stop_transcription()
 
         elif bytes_data:
+            # Log state on first audio chunk
+            if not hasattr(self, '_audio_chunk_count'):
+                self._audio_chunk_count = 0
+                logger.info(f"First audio chunk received - ws={self.ws is not None}, ws_ready={self.ws_ready}, streaming_active={self.streaming_active}")
+            
             # Forward audio data to Deepgram
-            if self.ws and self.ws.sock and self.ws.sock.connected and self.streaming_active:
+            if self.ws and self.ws_ready and self.streaming_active:
                 try:
                     self.ws.send(bytes_data, opcode=websocket.ABNF.OPCODE_BINARY)
+                    self._audio_chunk_count += 1
+                    if self._audio_chunk_count == 1:
+                        logger.info(f"✓ First audio chunk forwarded to Deepgram ({len(bytes_data)} bytes)")
+                    elif self._audio_chunk_count % 50 == 0:
+                        logger.info(f"→ Sent {self._audio_chunk_count} audio chunks to Deepgram ({len(bytes_data)} bytes/chunk)")
                 except Exception as e:
-                    logger.error(f"Error sending audio data to Deepgram: {e}")
+                    logger.error(f"Error sending audio data to Deepgram: {e}", exc_info=True)
+            else:
+                if not hasattr(self, '_dropped_warning_shown'):
+                    logger.warning(f"Audio dropped: ws={self.ws is not None}, ws_ready={self.ws_ready}, streaming_active={self.streaming_active}")
+                    self._dropped_warning_shown = True
 
     async def start_transcription(self, title, settings_data):
+        # Reset state for new transcription
+        self._audio_chunk_count = 0
+        if hasattr(self, '_dropped_warning_shown'):
+            del self._dropped_warning_shown
+            
         self.transcript_id = await self.create_transcript(title, settings_data)
         transcript_settings = await self.get_transcript_settings(self.transcript_id)
+        
+        # Get audio settings from client or use defaults
+        sample_rate = settings_data.get('sample_rate', 48000)
+        channels = settings_data.get('channels', 1)
+        encoding = settings_data.get('encoding', 'linear16')
 
         # Build Deepgram WebSocket URL with parameters
         features = {
@@ -90,7 +120,7 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
             "vad_events": "true"
         }
         base_url = f"wss://api.deepgram.com/v1/listen?model={transcript_settings.model}&language={transcript_settings.language}"
-        base_url += f"&encoding={self.AUDIO_ENCODING}&sample_rate={self.SAMPLE_RATE}&channels={self.CHANNELS}"
+        base_url += f"&encoding={encoding}&sample_rate={sample_rate}&channels={channels}"
         feature_params = "&".join([f"{key}={value}" for key, value in features.items()])
         deepgram_url = f"{base_url}&{feature_params}"
 
@@ -104,37 +134,58 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
             await self.stop_transcription()
             return
 
+        logger.info(f"Starting transcription with title: {title}")
+        logger.info(f"Settings: model={transcript_settings.model}, language={transcript_settings.language}")
+        logger.info(f"Deepgram URL: {deepgram_url}")
         self.streaming_active = True
 
         def on_open(ws):
-            logger.info("Deepgram WebSocket connection opened")
+            logger.info("✓ Deepgram WebSocket connection OPENED")
             self.ws_ready = True
             # Audio will be sent from client via WebSocket
 
         def on_message(ws, message):
             try:
                 data = json.loads(message)
+                logger.info(f"✓ Received message from Deepgram: type={data.get('type', 'unknown')}, is_final={data.get('is_final', False)}")
+                logger.debug(f"Message structure: {list(data.keys())}")
                 if 'channel' in data and 'alternatives' in data['channel']:
-                    asyncio.run_coroutine_threadsafe(
-                        self.process_transcript(data),
-                        self.loop
-                    )
+                    alternatives = data['channel']['alternatives']
+                    if alternatives:
+                        logger.info(f"  → Alternatives count: {len(alternatives)}")
+                        asyncio.run_coroutine_threadsafe(
+                            self.process_transcript(data),
+                            self.loop
+                        )
+                    else:
+                        logger.debug("No alternatives in channel message")
+                else:
+                    logger.debug(f"Message structure unexpected: {list(data.keys())}")
             except Exception as e:
-                logger.error(f"Error processing Deepgram message: {e}")
+                logger.error(f"Error processing Deepgram message: {e}", exc_info=True)
 
         def on_error(ws, error):
-            logger.error(f"Deepgram WebSocket error: {error}")
+            logger.error(f"✗ Deepgram WebSocket error: {error}", exc_info=True)
+            if hasattr(error, '__traceback__'):
+                import traceback
+                logger.error("".join(traceback.format_exception(type(error), error, error.__traceback__)))
             self.ws_ready = False
-            asyncio.run_coroutine_threadsafe(
-                self.send(text_data=json.dumps({
-                    'error': f"Deepgram error: {error}"
-                })),
-                self.loop
-            )
-            asyncio.run_coroutine_threadsafe(
-                self.stop_transcription(),
-                self.loop
-            )
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    self.send(text_data=json.dumps({
+                        'error': f"Deepgram error: {str(error)}"
+                    })),
+                    self.loop
+                )
+            except Exception as e:
+                logger.error(f"Failed to send error message: {e}")
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    self.stop_transcription(),
+                    self.loop
+                )
+            except Exception as e:
+                logger.error(f"Failed to stop transcription: {e}")
 
         def on_close(ws, close_status_code, close_msg):
             logger.info(f"Deepgram WebSocket closed: {close_status_code} - {close_msg}")
@@ -151,30 +202,52 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
             )
 
         logger.debug(f"Initializing Deepgram WebSocket with URL: {deepgram_url}")
-        self.ws = websocket.WebSocketApp(
-            deepgram_url,
-            header=[f"Authorization: Token {deepgram_api_key}"],
-            on_open=on_open,
-            on_message=on_message,
-            on_error=on_error,
-            on_close=on_close
-        )
+        logger.debug(f"Using Deepgram API key (first 10 chars): {deepgram_api_key[:10]}...")
+        
+        try:
+            self.ws = websocket.WebSocketApp(
+                deepgram_url,
+                header=[f"Authorization: Token {deepgram_api_key}"],
+                on_open=on_open,
+                on_message=on_message,
+                on_error=on_error,
+                on_close=on_close
+            )
+        except Exception as e:
+            logger.error(f"Failed to create WebSocketApp: {e}", exc_info=True)
+            await self.send(text_data=json.dumps({
+                'error': f'Failed to initialize WebSocket: {str(e)}'
+            }))
+            return
 
         self.ws_ready = False
-        self.ws_thread = threading.Thread(target=self.ws.run_forever, daemon=True)
-        self.ws_thread.start()
+        try:
+            self.ws_thread = threading.Thread(target=self.ws.run_forever, daemon=True)
+            self.ws_thread.start()
+            logger.info("WebSocket thread started")
+        except Exception as e:
+            logger.error(f"Failed to start WebSocket thread: {e}", exc_info=True)
+            await self.send(text_data=json.dumps({
+                'error': f'Failed to start WebSocket: {str(e)}'
+            }))
+            return
 
-        # Wait for WebSocket to be ready (timeout after 5 seconds)
-        timeout = 5
+        # Wait for WebSocket to be ready (timeout after 15 seconds)
+        timeout = 15
         start_time = asyncio.get_event_loop().time()
+        check_count = 0
         while not self.ws_ready:
-            if asyncio.get_event_loop().time() - start_time > timeout:
-                logger.error("Timeout waiting for Deepgram WebSocket connection")
+            elapsed = asyncio.get_event_loop().time() - start_time
+            if elapsed > timeout:
+                logger.error(f"Timeout waiting for Deepgram WebSocket connection after {elapsed:.1f}s")
                 await self.send(text_data=json.dumps({
-                    'error': 'Failed to connect to Deepgram WebSocket'
+                    'error': 'Failed to connect to Deepgram WebSocket - timeout'
                 }))
                 await self.stop_transcription()
                 return
+            check_count += 1
+            if check_count % 10 == 0:
+                logger.debug(f"Waiting for WebSocket connection... ({elapsed:.1f}s elapsed)")
             await asyncio.sleep(0.1)
 
         await self.send(text_data=json.dumps({
@@ -199,9 +272,20 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
 
     async def process_transcript(self, transcript):
         try:
+            logger.debug(f"Processing transcript with keys: {list(transcript.keys())}")
             result = transcript.get('channel', {}).get('alternatives', [{}])[0]
             text = result.get('transcript', '').strip()
+            is_final = transcript.get('is_final', False)
+            
+            # Log the first result in full to see what Deepgram is sending
+            if not hasattr(self, '_logged_first_result'):
+                logger.info(f"FIRST RESULT FROM DEEPGRAM: {result}")
+                self._logged_first_result = True
+            
+            logger.info(f"Transcript segment: text='{text}' (len={len(text)}), is_final={is_final}")
+            
             if not text:
+                logger.debug(f"Empty transcript, skipping. Confidence: {result.get('confidence', 'N/A')}")
                 return
 
             words = result.get('words', [])
@@ -221,6 +305,7 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
                 self.transcript_id, text, mapped_speaker, start_time, end_time, confidence
             )
 
+            logger.info(f"✓ Sending transcript segment to client: '{text[:30]}...'")
             await self.send(text_data=json.dumps({
                 'type': 'transcript_segment',
                 'segment_id': segment_id,
@@ -231,10 +316,13 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
                 'confidence': confidence
             }))
         except Exception as e:
-            logger.error(f"Error processing transcript: {e}")
-            await self.send(text_data=json.dumps({
-                'error': f"Error processing transcript: {str(e)}"
-            }))
+            logger.error(f"Error processing transcript: {e}", exc_info=True)
+            try:
+                await self.send(text_data=json.dumps({
+                    'error': f"Error processing transcript: {str(e)}"
+                }))
+            except Exception as send_error:
+                logger.error(f"Failed to send error message: {send_error}")
 
     def _get_primary_speaker(self, words):
         speaker_counts = {}

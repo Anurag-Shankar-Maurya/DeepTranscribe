@@ -42,22 +42,30 @@ class TranscriptionManager {
   setupWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/transcribe/`;
+    console.log(`→ Connecting to WebSocket at: ${wsUrl}`);
 
     this.socket = new WebSocket(wsUrl);
 
     this.socket.onopen = () => {
-      console.log('WebSocket connection established');
+      console.log('✓ WebSocket connection established');
       this.updateStatus('WebSocket connected');
     };
 
     this.socket.onclose = (event) => {
-      console.log('WebSocket connection closed', event);
+      console.log(`✗ WebSocket closed - Code: ${event.code}, Reason: ${event.reason}`);
       this.updateStatus('WebSocket disconnected');
-      this.stopRecording();
+      if (this.isRecording) {
+        this.stopRecording();
+      }
+      // Try to reconnect after 3 seconds
+      setTimeout(() => {
+        console.log('→ Attempting to reconnect...');
+        this.setupWebSocket();
+      }, 3000);
     };
 
     this.socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error('✗ WebSocket error:', error);
       this.updateStatus('WebSocket error');
     };
 
@@ -69,19 +77,33 @@ class TranscriptionManager {
   handleWebSocketMessage(event) {
     try {
       const data = JSON.parse(event.data);
+      console.log('← Received from server:', data.type || data.status || data.error);
 
       if (data.error) {
+        console.error('✗ Server error:', data.error);
         this.showError(data.error);
         return;
       }
 
       if (data.status === 'transcription_started') {
         this.transcriptId = data.transcript_id;
+        this.transcriptionStarted = true;
+        console.log('✓ Transcription started on server');
         this.updateStatus('Transcription started');
+        // Resolve the promise if waiting
+        if (this._transcriptionStartResolver) {
+          this._transcriptionStartResolver();
+          this._transcriptionStartResolver = null;
+        }
       } else if (data.status === 'transcription_stopped') {
+        this.transcriptionStarted = false;
+        console.log('✓ Transcription stopped');
         this.updateStatus('Transcription stopped');
       } else if (data.type === 'transcript_segment') {
+        console.log(`✓ Received transcript segment: "${data.text.substring(0, 50)}"${data.text.length > 50 ? '...' : ''}`);
         this.displayTranscriptSegment(data);
+      } else {
+        console.log('? Unknown message type:', data);
       }
     } catch (error) {
       console.error('Error parsing WebSocket message:', error);
@@ -91,7 +113,19 @@ class TranscriptionManager {
   async startRecording() {
     if (this.isRecording) return;
 
+    // Check if WebSocket is connected
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      console.error('✗ WebSocket not connected, state:', this.socket?.readyState);
+      this.showError('WebSocket not connected. Trying to reconnect...');
+      this.setupWebSocket();
+      return;
+    }
+
     try {
+      // Get the actual sample rate from AudioContext FIRST
+      const sampleRate = this.audioContext.sampleRate;
+      console.log(`→ AudioContext sample rate: ${sampleRate} Hz`);
+
       // Get title from input
       const title = document.getElementById('transcript-title').value || 'Untitled Transcript';
 
@@ -103,27 +137,72 @@ class TranscriptionManager {
         punctuate: document.getElementById('punctuate').checked,
         numerals: document.getElementById('numerals').checked,
         smart_format: document.getElementById('smart_format').checked,
+        sample_rate: sampleRate,  // Include actual sample rate
+        channels: 1,
+        encoding: 'linear16'
       };
 
+      // Resume AudioContext if suspended (required by Chrome autoplay policy)
+      if (this.audioContext.state === 'suspended') {
+        console.log('→ Resuming AudioContext...');
+        await this.audioContext.resume();
+        console.log('✓ AudioContext resumed');
+      }
+
       // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('→ Requesting microphone access...');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true
+        } 
+      });
+      console.log('✓ Microphone access granted');
+
+      // Create a flag to track transcription started
+      this.transcriptionStarted = false;
+
+      // Create a promise that resolves when transcription starts
+      const startPromise = new Promise((resolve) => {
+        this._transcriptionStartResolver = resolve;
+      });
 
       // Start transcription on the server
+      console.log('→ Sending start_transcription command');
       this.socket.send(JSON.stringify({
         command: 'start_transcription',
         title: title,
         settings: settings
       }));
 
-      // Set up audio processing
+      // Update UI state immediately so user sees feedback
+      this.isRecording = true;
+      this.updateButtonState();
+      this.updateStatus('Connecting to transcription service...');
+
+      // Set up audio processing BEFORE waiting for server
       const audioSource = this.audioContext.createMediaStreamSource(stream);
       const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
+      // Connect audio source to processor
       audioSource.connect(processor);
-      processor.connect(this.audioContext.destination);
+      // Connect to destination to keep the audio graph active
+      // (Set volume to 0 via GainNode to avoid feedback)
+      const gainNode = this.audioContext.createGain();
+      gainNode.gain.value = 0; // Mute the output
+      processor.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
 
+      let audioChunksCount = 0;
       processor.onaudioprocess = (e) => {
-        if (!this.isRecording) return;
+        if (!this.isRecording) {
+          return;
+        }
+
+        if (!this.transcriptionStarted) {
+          // Still waiting for server confirmation
+          return;
+        }
 
         // Get audio data
         const inputData = e.inputBuffer.getChannelData(0);
@@ -132,16 +211,27 @@ class TranscriptionManager {
         const pcmData = this.floatTo16BitPCM(inputData);
 
         // Send audio data to server
-        this.socket.send(pcmData);
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+          this.socket.send(pcmData);
+          audioChunksCount++;
+          if (audioChunksCount === 1) {
+            console.log('✓ First audio chunk sent');
+          } else if (audioChunksCount % 10 === 0) {
+            console.log(`→ Sent ${audioChunksCount} audio chunks (${pcmData.byteLength} bytes each)`);
+          }
+        } else {
+          console.warn('WebSocket not open, cannot send audio');
+        }
       };
+
+      // Wait for transcription to start
+      await startPromise;
+      console.log('✓ Server confirmed transcription started, audio will now flow');
 
       // Set up media recorder for visualizations
       this.mediaRecorder = new MediaRecorder(stream);
       this.mediaRecorder.start();
 
-      // Update UI state
-      this.isRecording = true;
-      this.updateButtonState();
       this.updateStatus('Recording...');
       this.startVisualization(stream);
 
@@ -150,7 +240,9 @@ class TranscriptionManager {
 
     } catch (error) {
       console.error('Error starting recording:', error);
-      this.showError('Could not access microphone');
+      this.isRecording = false;
+      this.updateButtonState();
+      this.showError('Could not access microphone: ' + error.message);
     }
   }
 
