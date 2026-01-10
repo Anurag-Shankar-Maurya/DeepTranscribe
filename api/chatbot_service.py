@@ -85,28 +85,38 @@ class ChatbotService:
             transcripts = Transcript.objects.filter(user=self.user).order_by('-created_at')[:20]
             if not transcripts:
                 return "You don't have any transcript sessions yet."
-
+            
             lines = ["Here are your most recent sessions:"]
             for t in transcripts:
                 lines.append(f"• **{t.title}** ({t.created_at.strftime('%b %d, %Y %I:%M %p')})")
             return "\n".join(lines)
 
         # Command: Summary of specific transcript(s)
-        # Regex captures the intention to summarize
-        summary_match = re.search(r'(?:summarize|summary of|summary for) (?:the )?(?:transcript )?["\']?([^"\']+)["\']?', text)
-
+        # 1. Regex to capture everything after the summarize command
+        summary_match = re.search(r'(?:summarize|summary of|summary for) (.*)', text)
+        
         if summary_match and 'last' not in text:
-            # Extract the raw target, e.g., "both sessions with Bipul"
             raw_target = summary_match.group(1).strip()
+            
+            # 2. Define a list of "noise" words that usually aren't part of the unique title
+            stop_words = {
+                'my', 'the', 'a', 'an', 'this', 'that', 'these', 'those',
+                'conversation', 'conversations', 'session', 'sessions', 'meeting', 'meetings',
+                'transcript', 'transcripts', 'chat', 'chats',
+                'with', 'about', 'for', 'of', 'both', 'all'
+            }
 
-            # Clean up common filler words to find the core title keyword
-            # Removes: 'both', 'all', 'sessions', 'with' to extract just "Bipul"
-            clean_query = raw_target.replace('both', '').replace('all', '').replace('sessions', '').replace('with', '').strip()
+            # 3. Tokenize and remove stop words
+            tokens = raw_target.split()
+            clean_tokens = [t for t in tokens if t not in stop_words]
+            clean_query = " ".join(clean_tokens).strip()
 
             if not clean_query:
-                return "Please specify which transcript title you would like me to summarize."
+                # If they just said "Summarize this", and we can't extract a name,
+                # we fail gracefully (or you could default to the most recent).
+                return "Please specify the name of the person or topic you want to summarize."
 
-            # Find ALL matching transcripts, not just the first one
+            # 4. Find ALL matching transcripts (handling "both" implicitly)
             transcripts = Transcript.objects.filter(user=self.user, title__icontains=clean_query).order_by('-created_at')
 
             if transcripts.exists():
@@ -239,14 +249,19 @@ class ChatbotService:
 
             # Get segments
             segments = transcript.segments.all().order_by('start_time')
+            if not segments.exists():
+                response_parts.append("*(This transcript appears to be empty)*\n")
+                continue
+
             full_text = "\n".join([f"{s.speaker}: {s.text}" for s in segments])
 
+            # Context limit safeguard
             prompt = f"""
             Analyze the following transcript titled "{transcript.title}".
             Provide a concise summary, listing key topics discussed and any action items.
 
             TRANSCRIPT:
-            {full_text[:20000]} # Limit to avoid context overflow
+            {full_text[:20000]}
             """
 
             try:
