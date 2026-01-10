@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Create floating circular button
   const floatButton = document.createElement('button');
   floatButton.id = 'chatbot-float-button';
-  floatButton.textContent = '💬';
+  floatButton.textContent = 'Ⓜ️';
   floatButton.title = 'Open Chatbot';
   floatButton.style.position = 'fixed';
   floatButton.style.bottom = '20px';

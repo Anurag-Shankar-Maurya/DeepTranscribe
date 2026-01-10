@@ -252,32 +252,81 @@ class ChatbotService:
         return results
 
     def _handle_specific_commands(self, text: str) -> Optional[str]:
-        """Checks for metadata queries not requiring LLM generation."""
+        """
+        Handles explicit requests for metadata, lists, summaries, or full text retrieval.
+        """
         text = text.lower()
+
+        # --- 1. COMMAND: LIST TRANSCRIPTS ---
         if any(x in text for x in ['list all transcripts', 'show my transcripts', 'list my sessions']):
             transcripts = Transcript.objects.filter(user=self.user).order_by('-created_at')[:20]
             if not transcripts:
                 return "You don't have any transcript sessions yet."
+            
             lines = ["Here are your most recent sessions:"]
             for t in transcripts:
                 lines.append(f"• **{t.title}** ({t.created_at.strftime('%b %d, %Y %I:%M %p')})")
             return "\n".join(lines)
 
-        # Handle specific transcript summaries (e.g., "Summarize the meeting about Budget")
+        # --- 2. COMMAND: READ/SHOW FULL TEXT ---
+        # Matches: "Show text of...", "Read the transcript...", "Content of..."
+        read_match = re.search(r'(?:read|show|display|get|text of|content of) (?:the )?(?:transcript |conversation )?(?:for |with |about )?["\']?([^"\']+)["\']?', text)
+        
+        # Ensure we don't accidentally trigger on "show my transcripts"
+        if read_match and 'list' not in text and 'transcripts' not in text.replace(read_match.group(1), ""):
+            raw_target = read_match.group(1).strip()
+            clean_query = self._clean_search_query(raw_target)
+
+            if clean_query:
+                # Find the transcript
+                transcript = Transcript.objects.filter(user=self.user, title__icontains=clean_query).first()
+                if transcript:
+                    segments = transcript.segments.all().order_by('start_time')
+                    if not segments.exists():
+                        return f"**Transcript:** {transcript.title}\n*(This transcript is empty)*"
+                    
+                    lines = [f"**Full Text for '{transcript.title}':**\n"]
+                    for s in segments:
+                        lines.append(f"**{s.speaker}:** {s.text}")
+                    return "\n".join(lines)
+                else:
+                    return f"I couldn't find a transcript matching '{clean_query}' to read."
+
+        # --- 3. COMMAND: SUMMARIZE ---
         summary_match = re.search(r'(?:summarize|summary of|summary for) (.*)', text)
+        
         if summary_match and 'last' not in text:
             raw_target = summary_match.group(1).strip()
-            stop_words = {'my', 'the', 'a', 'an', 'this', 'session', 'transcript', 'meeting'}
-            clean_tokens = [t for t in raw_target.split() if t not in stop_words]
-            clean_query = " ".join(clean_tokens).strip()
-            
-            if not clean_query: return "Please specify a name or topic to summarize."
-            
-            transcripts = Transcript.objects.filter(user=self.user, title__icontains=clean_query).order_by('-created_at')
-            if transcripts.exists():
+            clean_query = self._clean_search_query(raw_target)
+
+            # Logic: If query is empty (e.g. user said "Summarize it" -> cleaned to ""), 
+            # assume they want the MOST RECENT transcript.
+            if not clean_query:
+                transcripts = Transcript.objects.filter(user=self.user).order_by('-created_at')[:1]
+                if not transcripts.exists():
+                     return "You don't have any transcripts to summarize."
                 return self._generate_multi_transcript_summary(transcripts)
-            return f"No transcripts found matching '{clean_query}'."
+            else:
+                # Specific search
+                transcripts = Transcript.objects.filter(user=self.user, title__icontains=clean_query).order_by('-created_at')
+                if transcripts.exists():
+                    return self._generate_multi_transcript_summary(transcripts)
+                else:
+                    return f"I couldn't find any transcripts with the title containing '{clean_query}'."
+
         return None
+
+    def _clean_search_query(self, raw_text: str) -> str:
+        """Helper to remove noise words from search queries."""
+        stop_words = {
+            'my', 'the', 'a', 'an', 'this', 'that', 'these', 'those', 'it', 'them',
+            'conversation', 'conversations', 'session', 'sessions', 'meeting', 'meetings',
+            'transcript', 'transcripts', 'chat', 'chats',
+            'with', 'about', 'for', 'of', 'both', 'all', 'please', 'can', 'you', 'me'
+        }
+        tokens = raw_text.split()
+        clean_tokens = [t for t in tokens if t not in stop_words]
+        return " ".join(clean_tokens).strip()
 
     def _generate_multi_transcript_summary(self, transcripts) -> str:
         """Helper to summarize full transcripts via RAG/LLM."""
