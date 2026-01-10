@@ -76,8 +76,7 @@ class ChatbotService:
 
     def _handle_specific_commands(self, text: str) -> Optional[str]:
         """
-        Handles explicit requests for metadata, lists, or summaries that
-        are better served by DB queries than semantic search.
+        Handles explicit requests for metadata, lists, or summaries.
         """
         text = text.lower()
 
@@ -86,34 +85,29 @@ class ChatbotService:
             transcripts = Transcript.objects.filter(user=self.user).order_by('-created_at')[:20]
             if not transcripts:
                 return "You don't have any transcript sessions yet."
-
+            
             lines = ["Here are your most recent sessions:"]
             for t in transcripts:
-                lines.append(f"• **{t.title}** ({t.created_at.strftime('%b %d, %Y %I:%M %p')}) - {t.duration or 'Unknown'} sec")
+                lines.append(f"• **{t.title}** ({t.created_at.strftime('%b %d, %Y %I:%M %p')})")
             return "\n".join(lines)
 
-        # Command: List last X
-        match = re.search(r'last (\d+) (transcripts|sessions)', text)
-        if match:
-            count = int(match.group(1))
-            transcripts = Transcript.objects.filter(user=self.user).order_by('-created_at')[:count]
-            lines = [f"Here are your last {len(transcripts)} sessions:"]
-            for t in transcripts:
-                lines.append(f"• {t.title} ({t.created_at.strftime('%Y-%m-%d')})")
-            return "\n".join(lines)
-
-        # Command: Summary of specific transcript (Exact or fuzzy title match)
-        # Regex looks for: "Summary of 'Meeting X'" or "Summarize Meeting X"
+        # Command: Summary of specific transcript(s)
+        # Regex captures the core name, e.g., "Bipul Conversation" from "Summarize both Bipul Conversation sessions"
         summary_match = re.search(r'(?:summarize|summary of|summary for) (?:the )?(?:transcript )?["\']?([^"\']+)["\']?', text)
+        
         if summary_match and 'last' not in text:
-            query_title = summary_match.group(1).strip()
-            # Try exact match first, then icontains
-            transcript = Transcript.objects.filter(user=self.user, title__iexact=query_title).first()
-            if not transcript:
-                transcript = Transcript.objects.filter(user=self.user, title__icontains=query_title).first()
+            raw_query = summary_match.group(1).strip()
+            
+            # cleanup common words that confuse the title lookup
+            clean_query = raw_query.replace('both', '').replace('all', '').replace('sessions', '').strip()
 
-            if transcript:
-                return self._generate_transcript_summary(transcript)
+            # Find ALL matching transcripts, not just the first one
+            transcripts = Transcript.objects.filter(user=self.user, title__icontains=clean_query).order_by('-created_at')
+
+            if transcripts.exists():
+                return self._generate_multi_transcript_summary(transcripts)
+            elif not transcripts.exists() and len(clean_query) > 3:
+                 return f"I couldn't find any transcripts with the title containing '{clean_query}'."
 
         return None
 
@@ -224,24 +218,42 @@ class ChatbotService:
                 })
         return results
 
-    def _generate_transcript_summary(self, transcript: Transcript) -> str:
-        """Summarizes a specific transcript on demand."""
-        segments = transcript.segments.all().order_by('start_time')
-        full_text = "\n".join([f"{s.speaker}: {s.text}" for s in segments])
-
-        prompt = f"""
-        Analyze the following transcript titled "{transcript.title}".
-        Provide a concise summary, listing key topics discussed, decisions made, and any action items.
-
-        TRANSCRIPT:
-        {full_text[:30000]}  # Truncate to avoid context limits if huge
+    def _generate_multi_transcript_summary(self, transcripts) -> str:
         """
+        Summarizes a queryset of transcripts.
+        If multiple are found, it generates a combined summary.
+        """
+        response_parts = []
 
-        response = self.client.models.generate_content(
-            model=self.chat_model_name,
-            contents=prompt
-        )
-        return f"**Summary of {transcript.title}:**\n\n{response.text}"
+        count = transcripts.count()
+        response_parts.append(f"Found {count} transcript{'s' if count > 1 else ''} matching your request.\n")
+
+        for transcript in transcripts:
+            segments = transcript.segments.all().order_by('start_time')
+            full_text = "\n".join([f"{s.speaker}: {s.text}" for s in segments])
+
+            # Header for this specific transcript
+            response_parts.append(f"### Summary for: {transcript.title} ({transcript.created_at.strftime('%b %d')})")
+
+            prompt = f"""
+            Analyze the following transcript titled "{transcript.title}".
+            Provide a concise summary, listing key topics discussed and any action items.
+
+            TRANSCRIPT:
+            {full_text[:25000]}
+            """
+
+            try:
+                llm_response = self.client.models.generate_content(
+                    model=self.chat_model_name,
+                    contents=prompt
+                )
+                response_parts.append(llm_response.text + "\n")
+            except Exception as e:
+                logger.error(f"Summary generation failed for {transcript.id}: {e}")
+                response_parts.append("*(Could not generate summary for this specific session due to an error)*\n")
+
+        return "\n".join(response_parts)
 
     def _build_system_prompt(self) -> str:
         """
