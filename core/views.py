@@ -1,6 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
+from django.db.models import Q
 from .models import Transcript, TranscriptSegment, TranscriptSettings
 from .forms import TranscriptForm, TranscriptSettingsForm, TranscriptSegmentFormSet # Import forms
 import json
@@ -29,6 +30,33 @@ def transcribe(request):
 def transcript_list(request):
     """Render the list of user transcripts."""
     transcripts = Transcript.objects.filter(user=request.user)
+
+    # Apply search filter
+    search_query = request.GET.get('search', '').strip()
+    if search_query:
+        transcripts = transcripts.filter(
+            Q(title__icontains=search_query) |
+            Q(segments__text__icontains=search_query)
+        ).distinct()
+
+    # Apply status filter
+    status = request.GET.get('status', '')
+    if status == 'completed':
+        transcripts = transcripts.filter(is_complete=True)
+    elif status == 'in_progress':
+        transcripts = transcripts.filter(is_complete=False)
+
+    # Apply sorting
+    sort_by = request.GET.get('sort', 'created_at_desc')
+    if sort_by == 'created_at_desc':
+        transcripts = transcripts.order_by('-created_at')
+    elif sort_by == 'created_at_asc':
+        transcripts = transcripts.order_by('created_at')
+    elif sort_by == 'title_asc':
+        transcripts = transcripts.order_by('title')
+    elif sort_by == 'title_desc':
+        transcripts = transcripts.order_by('-title')
+
     return render(request, 'core/transcript_list.html', {'transcripts': transcripts})
 
 
