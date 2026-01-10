@@ -3,144 +3,210 @@
 
 {% block title %}{{ transcript.title }}{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* Custom scrollbar for the transcript area if it gets too long */
+    .transcript-content {
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e1 transparent;
+    }
+    .transcript-content::-webkit-scrollbar {
+        width: 6px;
+    }
+    .transcript-content::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .transcript-content::-webkit-scrollbar-thumb {
+        background-color: #cbd5e1;
+        border-radius: 20px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <div class="max-w-5xl mx-auto">
-        <div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between">
-            <div>
-                <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ transcript.title }}</h1>
-                <p class="text-gray-600">
-                    Created: {{ transcript.created_at|date:"F j, Y, g:i a" }} •
-                    Duration: {{ transcript.duration|floatformat:"0" }}s •
-                    Status:
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if transcript.is_complete %}bg-success-100 text-success-800{% else %}bg-warning-100 text-warning-800{% endif %}">
-                        {% if transcript.is_complete %}Completed{% else %}In Progress{% endif %}
-                    </span>
-                </p>
-            </div>
-            <div class="flex space-x-3 mt-4 md:mt-0">
-                <a href="{% url 'core:transcript_edit' transcript.id %}"
-                   class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
-                    Edit
-                </a>
-                <div class="relative inline-block text-left">
-                    <button id="download-button" type="button" aria-haspopup="true" aria-expanded="true"
-                        class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors">
-                        Download
-                        <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
-                    <div id="download-menu" class="origin-top-right absolute right-0 mt-2 w-40 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none hidden z-10">
-                        <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="download-button">
-                            <a href="{% url 'core:transcript_download' transcript.id 'pdf' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Download PDF</a>
-                            <a href="{% url 'core:transcript_download' transcript.id 'txt' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Download TXT</a>
-                            <a href="{% url 'core:transcript_download' transcript.id 'json' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Download JSON</a>
+<div class="min-h-[calc(100vh-4rem)] bg-gray-50 py-8">
+    <div class="container mx-auto px-4 max-w-5xl">
+        
+        <!-- Navigation / Breadcrumb -->
+        <nav class="flex mb-6" aria-label="Breadcrumb">
+            <a href="{% url 'core:transcript_list' %}" class="flex items-center text-sm font-medium text-gray-500 hover:text-primary-600 transition-colors">
+                <svg class="flex-shrink-0 w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                Back to Transcripts
+            </a>
+        </nav>
+
+        <!-- Header Section -->
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-2">
+                        <h1 class="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">{{ transcript.title }}</h1>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border {% if transcript.is_complete %}bg-success-50 text-success-700 border-success-200{% else %}bg-warning-50 text-warning-700 border-warning-200{% endif %}">
+                            <span class="w-1.5 h-1.5 rounded-full mr-1.5 {% if transcript.is_complete %}bg-success-500{% else %}bg-warning-500{% endif %}"></span>
+                            {% if transcript.is_complete %}Completed{% else %}In Progress{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-500">
+                        <div class="flex items-center">
+                            <svg class="mr-1.5 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            {{ transcript.created_at|date:"F j, Y, g:i a" }}
+                        </div>
+                        <div class="flex items-center">
+                            <svg class="mr-1.5 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Duration: {{ transcript.duration|floatformat:"0" }}s
                         </div>
                     </div>
                 </div>
-                <a href="{% url 'core:transcript_delete' transcript.id %}"
-                   class="px-4 py-2 bg-error-600 text-white rounded-md hover:bg-error-700 focus:outline-none focus:ring-2 focus:ring-error-500 focus:ring-offset-2 transition-colors">
-                    Delete
-                </a>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center gap-3 self-start">
+                    <a href="{% url 'core:transcript_edit' transcript.id %}"
+                       class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
+                        <svg class="mr-2 -ml-1 h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        Edit
+                    </a>
+
+                    <!-- Dropdown -->
+                    <div class="relative inline-block text-left">
+                        <button id="download-button" type="button" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
+                            <svg class="mr-2 -ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            Download
+                            <svg class="ml-2 -mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                        
+                        <div id="download-menu" class="hidden absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50 transform opacity-0 scale-95 transition-all duration-200 origin-top-right">
+                            <div class="py-1">
+                                <a href="{% url 'core:transcript_download' transcript.id 'pdf' %}" class="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600">
+                                    <svg class="mr-3 h-5 w-5 text-gray-400 group-hover:text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                    PDF Document
+                                </a>
+                                <a href="{% url 'core:transcript_download' transcript.id 'txt' %}" class="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600">
+                                    <svg class="mr-3 h-5 w-5 text-gray-400 group-hover:text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                    Plain Text
+                                </a>
+                                <a href="{% url 'core:transcript_download' transcript.id 'json' %}" class="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600">
+                                    <svg class="mr-3 h-5 w-5 text-gray-400 group-hover:text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                                    JSON Data
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <a href="{% url 'core:transcript_delete' transcript.id %}" 
+                       class="text-gray-400 hover:text-error-600 p-2 rounded-lg hover:bg-error-50 transition-colors"
+                       title="Delete Transcript">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </a>
+                </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">Transcript Content</h2>
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left: Transcript Text (2/3 width) -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div class="border-b border-gray-100 bg-gray-50/50 px-6 py-4 flex items-center justify-between">
+                        <h2 class="font-semibold text-gray-900">Transcription</h2>
+                        <span class="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded">confidence score enabled</span>
+                    </div>
 
-            {% if segments %}
-            <div class="space-y-4">
-                {% for segment in segments %}
-                {% if segment.speaker is not None %}
-                <!-- Make sure to explicitly convert speaker to string for the data attribute -->
-                <div class="p-4 rounded-lg" data-segment-id="{{ forloop.counter }}"
-                     data-speaker-id="{{ segment.speaker }}">
-                    <div class="font-semibold text-sm mb-1 speaker-label">Speaker {{ segment.speaker }}</div>
-                    <p class="text-gray-800">{{ segment.text }}</p>
-                    <div class="text-xs text-gray-500 mt-1">
-                        {{ segment.start_time|floatformat:"2" }}s - {{ segment.end_time|floatformat:"2" }}s
-                        {% if segment.confidence %}
-                        • Confidence: {{ segment.confidence|floatformat:"2" }}
+                    <div class="p-6 transcript-content">
+                        {% if segments %}
+                        <div class="space-y-6">
+                            {% for segment in segments %}
+                                <div class="relative pl-4 transition-all hover:bg-gray-50 rounded-r-lg p-2 group"
+                                     {% if segment.speaker is not None %}
+                                     data-speaker-id="{{ segment.speaker }}"
+                                     {% endif %}
+                                     data-segment-id="{{ forloop.counter }}">
+
+                                    <div class="flex items-baseline justify-between mb-1">
+                                        <span class="text-xs font-bold tracking-wide uppercase speaker-label text-gray-600">
+                                            {% if segment.speaker is not None %}Speaker {{ segment.speaker }}{% else %}Unknown Speaker{% endif %}
+                                        </span>
+                                        <div class="text-[10px] font-mono text-gray-400 flex items-center gap-2">
+                                            <span>{{ segment.start_time|floatformat:"1" }}s - {{ segment.end_time|floatformat:"1" }}s</span>
+                                            {% if segment.confidence %}
+                                            <span class="inline-block bg-green-100 text-green-700 px-1 rounded" title="Confidence Score">{{ segment.confidence }}%</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    
+                                    <p class="text-gray-800 leading-relaxed text-[15px]">{{ segment.text }}</p>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-12">
+                            <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900">No content available</h3>
+                            <p class="mt-1 text-sm text-gray-500">The transcription process hasn't produced any text yet.</p>
+                        </div>
                         {% endif %}
                     </div>
                 </div>
-                {% else %}
-                <div class="p-4 rounded-lg bg-gray-50" data-segment-id="{{ forloop.counter }}">
-                    <p class="text-gray-800">{{ segment.text }}</p>
-                    <div class="text-xs text-gray-500 mt-1">
-                        {{ segment.start_time|floatformat:"2" }}s - {{ segment.end_time|floatformat:"2" }}s
-                        {% if segment.confidence %}
-                        • Confidence: {{ segment.confidence|floatformat:"2" }}
-                        {% endif %}
+            </div>
+
+            <!-- Right: Settings & Details (1/3 width) -->
+            <div class="space-y-6">
+                <!-- Configuration Card -->
+                <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                    <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Configuration</h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <span class="text-xs text-gray-500 block mb-1">AI Model</span>
+                            <span class="text-sm font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">{{ transcript.settings.model }}</span>
+                        </div>
+                        <div>
+                            <span class="text-xs text-gray-500 block mb-1">Detected Language</span>
+                            <span class="text-sm font-medium text-gray-900 flex items-center">
+                                <svg class="w-4 h-4 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>
+                                {{ transcript.settings.language|default:"Auto-detected" }}
+                            </span>
+                        </div>
                     </div>
                 </div>
-                {% endif %}
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="text-center py-8">
-                <p class="text-gray-500">No transcript content available.</p>
-            </div>
-            {% endif %}
-        </div>
 
-        <div class="mt-6 bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">Transcript Settings</h2>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <h3 class="text-sm font-medium text-gray-700">Model</h3>
-                    <p class="mt-1 text-gray-900">{{ transcript.settings.model }}</p>
-                </div>
-
-                <div>
-                    <h3 class="text-sm font-medium text-gray-700">Language</h3>
-                    <p class="mt-1 text-gray-900">{{ transcript.settings.language }}</p>
-                </div>
-
-                <div>
-                    <h3 class="text-sm font-medium text-gray-700">Features</h3>
-                    <div class="mt-1 text-gray-900">
-                        <ul class="space-y-1">
-                            <li class="flex items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                     class="h-4 w-4 mr-2 {% if transcript.settings.diarize %}text-success-600{% else %}text-gray-400{% endif %}"
-                                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                          d="M5 13l4 4L19 7"/>
-                                </svg>
-                                Speaker Diarization
-                            </li>
-                            <li class="flex items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                     class="h-4 w-4 mr-2 {% if transcript.settings.punctuate %}text-success-600{% else %}text-gray-400{% endif %}"
-                                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                          d="M5 13l4 4L19 7"/>
-                                </svg>
-                                Punctuation
-                            </li>
-                            <li class="flex items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                     class="h-4 w-4 mr-2 {% if transcript.settings.numerals %}text-success-600{% else %}text-gray-400{% endif %}"
-                                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                          d="M5 13l4 4L19 7"/>
-                                </svg>
-                                Convert Numerals
-                            </li>
-                            <li class="flex items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                     class="h-4 w-4 mr-2 {% if transcript.settings.smart_format %}text-success-600{% else %}text-gray-400{% endif %}"
-                                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                          d="M5 13l4 4L19 7"/>
-                                </svg>
-                                Smart Formatting
-                            </li>
-                        </ul>
-                    </div>
+                <!-- Features Enabled Card -->
+                <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                    <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Enabled Features</h3>
+                    <ul class="space-y-3">
+                        <li class="flex items-center text-sm">
+                            {% if transcript.settings.diarize %}
+                                <div class="w-6 h-6 rounded-full bg-success-100 text-success-600 flex items-center justify-center mr-3"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>
+                                <span class="text-gray-700">Speaker Diarization</span>
+                            {% else %}
+                                <div class="w-6 h-6 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center mr-3"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></div>
+                                <span class="text-gray-400 line-through">Speaker Diarization</span>
+                            {% endif %}
+                        </li>
+                        <li class="flex items-center text-sm">
+                            {% if transcript.settings.punctuate %}
+                                <div class="w-6 h-6 rounded-full bg-success-100 text-success-600 flex items-center justify-center mr-3"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>
+                                <span class="text-gray-700">Auto Punctuation</span>
+                            {% else %}
+                                <div class="w-6 h-6 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center mr-3"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></div>
+                                <span class="text-gray-400 line-through">Auto Punctuation</span>
+                            {% endif %}
+                        </li>
+                        <li class="flex items-center text-sm">
+                            {% if transcript.settings.numerals %}
+                                <div class="w-6 h-6 rounded-full bg-success-100 text-success-600 flex items-center justify-center mr-3"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>
+                                <span class="text-gray-700">Convert Numerals</span>
+                            {% else %}
+                                <div class="w-6 h-6 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center mr-3"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></div>
+                                <span class="text-gray-400 line-through">Convert Numerals</span>
+                            {% endif %}
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -149,7 +215,6 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Define the same speaker colors used in TranscriptionManager
         const speakerColors = [
           '#3898f3', // primary blue
           '#f59e0b', // amber
@@ -173,46 +238,74 @@
           '#06b6d4', // turquoise
         ];
 
-
-        // Process each segment with a speaker ID
+        // Process Speaker styling
         const segments = document.querySelectorAll('[data-speaker-id]');
 
         segments.forEach(segment => {
-            // Get the speaker ID from the data attribute
             const speakerId = parseInt(segment.dataset.speakerId);
+            
+            // Logic to handle unknown speakers nicely
+            if (!isNaN(speakerId)) {
+                const colorIndex = speakerId % speakerColors.length;
+                const speakerColor = speakerColors[colorIndex];
 
-            // Calculate color index (always works for any integer, including 0)
-            const colorIndex = speakerId % speakerColors.length;
-            const speakerColor = speakerColors[colorIndex];
+                // Apply dynamic styles
+                // We use a stronger border and a very subtle background tint
+                segment.style.borderLeft = `3px solid ${speakerColor}`;
+                segment.style.backgroundColor = `${speakerColor}08`; // 8% opacity (hex alpha)
 
-            // Apply the styling
-            segment.style.backgroundColor = `${speakerColor}15`; // 15% opacity
-            segment.style.borderLeft = `4px solid ${speakerColor}`;
-
-            // Find and style the speaker label
-            const speakerLabel = segment.querySelector('.speaker-label');
-            if (speakerLabel) {
-                speakerLabel.style.color = speakerColor;
+                const speakerLabel = segment.querySelector('.speaker-label');
+                if (speakerLabel) {
+                    speakerLabel.style.color = speakerColor;
+                }
+            } else {
+                // Default style for null speakers
+                segment.style.borderLeft = `3px solid #9ca3af`;
             }
-
-            // Log for debugging
-            console.log(`Applied color ${speakerColor} to speaker ${speakerId}`);
         });
 
-        // Toggle download menu visibility
+        // Dropdown Logic
         const downloadButton = document.getElementById('download-button');
         const downloadMenu = document.getElementById('download-menu');
 
-        downloadButton.addEventListener('click', () => {
-            downloadMenu.classList.toggle('hidden');
-        });
+        if (downloadButton && downloadMenu) {
+            downloadButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = downloadMenu.classList.contains('hidden');
+                
+                if (isHidden) {
+                    // Open
+                    downloadMenu.classList.remove('hidden');
+                    // Small delay to allow display:block to apply before opacity transition
+                    requestAnimationFrame(() => {
+                        downloadMenu.classList.remove('opacity-0', 'scale-95');
+                        downloadMenu.classList.add('opacity-100', 'scale-100');
+                    });
+                } else {
+                    // Close
+                    closeMenu();
+                }
+            });
 
-        // Close the menu if clicking outside
-        document.addEventListener('click', (event) => {
-            if (!downloadButton.contains(event.target) && !downloadMenu.contains(event.target)) {
-                downloadMenu.classList.add('hidden');
+            function closeMenu() {
+                downloadMenu.classList.remove('opacity-100', 'scale-100');
+                downloadMenu.classList.add('opacity-0', 'scale-95');
+                
+                // Wait for transition to finish before hiding
+                setTimeout(() => {
+                    downloadMenu.classList.add('hidden');
+                }, 200);
             }
-        });
+
+            // Close when clicking outside
+            document.addEventListener('click', (event) => {
+                if (!downloadButton.contains(event.target) && !downloadMenu.contains(event.target)) {
+                   if (!downloadMenu.classList.contains('hidden')) {
+                       closeMenu();
+                   }
+                }
+            });
+        }
     });
 </script>
 {% endblock %}
