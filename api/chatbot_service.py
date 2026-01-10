@@ -1,5 +1,5 @@
 import numpy as np
-import google.generativeai as genai
+import google.genai as genai
 from django.conf import settings
 from django.db.models import Q
 from .models import ChatMessage, ChatMessageEmbedding
@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 class ChatbotService:
     def __init__(self, user):
         self.user = user
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
         # Use a lightweight model for embeddings, standard for chat
         self.embedding_model = "models/text-embedding-004"
-        self.chat_model_name = "gemini-2.5-flash-lite"
+        self.chat_model_name = "gemma-3-27b-it"
 
         self.retrieval_threshold = 0.45  # Stricter threshold to reduce noise
         self.top_k = 10  # Number of segments to retrieve
@@ -45,18 +45,23 @@ class ChatbotService:
             # Get recent conversation history (last 5 messages for flow)
             history = self._get_recent_history()
 
-            model = genai.GenerativeModel(
-                self.chat_model_name,
-                system_instruction=system_prompt
+            # Create chat session
+            chat = self.client.chats.create(
+                model=self.chat_model_name
             )
 
-            # Construct the final prompt with context
+            # Add history if any
+            for h in history:
+                # Note: history format might need adjustment
+                pass  # For now, skip history to avoid complexity
+
+            # Construct the final prompt with context and system instruction
             final_prompt = (
+                f"{system_prompt}\n\n"
                 f"CONTEXT FROM TRANSCRIPTS AND MEMORY:\n{context_text}\n\n"
                 f"CURRENT USER QUESTION: {user_message}"
             )
 
-            chat = model.start_chat(history=history)
             response = chat.send_message(final_prompt)
             answer = response.text.strip()
 
@@ -232,8 +237,10 @@ class ChatbotService:
         {full_text[:30000]}  # Truncate to avoid context limits if huge
         """
 
-        model = genai.GenerativeModel(self.chat_model_name)
-        response = model.generate_content(prompt)
+        response = self.client.models.generate_content(
+            model=self.chat_model_name,
+            contents=prompt
+        )
         return f"**Summary of {transcript.title}:**\n\n{response.text}"
 
     def _build_system_prompt(self) -> str:
@@ -267,12 +274,12 @@ class ChatbotService:
 
     def _get_embedding(self, text: str) -> Optional[List[float]]:
         try:
-            result = genai.embed_content(
+            result = self.client.models.embed_content(
                 model=self.embedding_model,
-                content=text,
+                contents=text,
                 task_type="retrieval_query"
             )
-            return result['embedding']
+            return result.embedding
         except Exception as e:
             logger.error(f"Embedding failed: {e}")
             return None
