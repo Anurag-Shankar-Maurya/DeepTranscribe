@@ -33,11 +33,3 @@ def profile(request):
         form = UserUpdateForm(instance=request.user)
     
     return render(request, 'users/profile.html', {'form': form})
-
-
-@login_required
-def api_key(request):
-    """Display Deepgram API key information."""
-    # For security, don't show the actual API key
-    api_key_prefix = settings.DEEPGRAM_API_KEY[:4] + '...' if settings.DEEPGRAM_API_KEY else None
-    return render(request, 'users/api_key.html', {'api_key_prefix': api_key_prefix})
