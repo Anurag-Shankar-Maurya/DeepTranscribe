@@ -7,10 +7,12 @@ import logging
 from datetime import datetime
 import re
 
-# Import your models. 
+# Import your models.
 # Ensure ChatSession exists in your models.py with fields like 'session_id', 'user', and 'summary'
 from .models import ChatMessage, ChatMessageEmbedding, ChatSession
 from core.models import Transcript, TranscriptEmbedding
+from .retrieval_service import AdvancedRetrievalService
+from .memory_consolidator import MemoryConsolidator
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,7 @@ class ChatbotService:
         self.chat_model_name = "gemma-3-27b-it" 
         
         # Utility Model: Used for background summarization (Fast/Cheap)
-        self.summary_model_name = "gemma-3-12b-it"
+        self.summary_model_name = "gemma-3-27b-it"
 
         # --- Memory Settings ---
         self.buffer_window_size = 6     # Keep last 6 messages raw in context
@@ -48,9 +50,15 @@ class ChatbotService:
         # Retrieve or create the session object to access persistent summary
         # Assumes ChatSession model has: user, session_id, and summary (TextField)
         self.chat_session, _ = ChatSession.objects.get_or_create(
-            user=self.user, 
+            user=self.user,
             session_id=self.session_id
         )
+
+        # Initialize Advanced Retrieval Service
+        self.retriever = AdvancedRetrievalService(user=self.user, client=self.client)
+
+        # Initialize Memory Consolidator for background processing
+        self.consolidator = MemoryConsolidator(client=self.client)
 
     def generate_response(self, user_message: str) -> str:
         """
@@ -72,9 +80,9 @@ class ChatbotService:
                 return command_response
 
             # 3. Build Contexts
-            # A. RAG Context (External Knowledge from Transcripts)
-            rag_context = self._build_rag_context(user_message)
-            
+            # A. Advanced RAG Context (External Knowledge from Transcripts + Graph + Summaries)
+            advanced_context = self.retriever.retrieve(user_message)
+
             # B. Conversation Memory (Current Session Only)
             memory_context = self._build_conversation_memory()
 
@@ -84,13 +92,13 @@ class ChatbotService:
             # 5. Construct Final Prompt
             final_prompt_parts = [
                 f"{system_prompt}\n",
-                
+
                 "### CONTEXT: LONG TERM MEMORY (Summary of this session so far)",
                 f"{memory_context['summary'] if memory_context['summary'] else 'No previous context summary available yet.'}",
-                
-                "\n### CONTEXT: RETRIEVED TRANSCRIPTS (Reference Data)",
-                f"{rag_context if rag_context else 'No specific transcript data found.'}",
-                
+
+                "\n### CONTEXT: ADVANCED RETRIEVAL (Precise facts, relationships, and summaries)",
+                f"{advanced_context if advanced_context else 'No relevant data found in knowledge base.'}",
+
                 "\n### CONTEXT: RECENT CHAT BUFFER (Immediate History)"
             ]
 
