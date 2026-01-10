@@ -107,7 +107,7 @@
         </div>
 
         <!-- Main Content Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
             
             <!-- Left: Transcript Text (2/3 width) -->
             <div class="lg:col-span-2">
@@ -126,7 +126,7 @@
                                      data-speaker-id="{{ segment.speaker }}"
                                      {% endif %}
                                      data-segment-id="{{ forloop.counter }}">
-
+                                    
                                     <div class="flex items-baseline justify-between mb-1">
                                         <span class="text-xs font-bold tracking-wide uppercase speaker-label text-gray-600">
                                             {% if segment.speaker is not None %}Speaker {{ segment.speaker }}{% else %}Unknown Speaker{% endif %}
@@ -154,8 +154,8 @@
                 </div>
             </div>
 
-            <!-- Right: Settings & Details (1/3 width) -->
-            <div class="space-y-6">
+            <!-- Right: Settings & Details (1/3 width) - STICKY SIDEBAR -->
+            <div class="space-y-6 lg:sticky lg:top-8 self-start">
                 <!-- Configuration Card -->
                 <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
                     <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Configuration</h3>
@@ -206,6 +206,15 @@
                                 <span class="text-gray-400 line-through">Convert Numerals</span>
                             {% endif %}
                         </li>
+                        <li class="flex items-center text-sm">
+                            {% if transcript.settings.smart_format %}
+                                <div class="w-6 h-6 rounded-full bg-success-100 text-success-600 flex items-center justify-center mr-3"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>
+                                <span class="text-gray-700">Smart Formatting</span>
+                            {% else %}
+                                <div class="w-6 h-6 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center mr-3"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></div>
+                                <span class="text-gray-400 line-through">Smart Formatting</span>
+                            {% endif %}
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -250,9 +259,8 @@
                 const speakerColor = speakerColors[colorIndex];
 
                 // Apply dynamic styles
-                // We use a stronger border and a very subtle background tint
                 segment.style.borderLeft = `3px solid ${speakerColor}`;
-                segment.style.backgroundColor = `${speakerColor}08`; // 8% opacity (hex alpha)
+                segment.style.backgroundColor = `${speakerColor}08`; // 8% opacity
 
                 const speakerLabel = segment.querySelector('.speaker-label');
                 if (speakerLabel) {
