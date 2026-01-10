@@ -22,7 +22,7 @@ def register(request):
 
 @login_required
 def profile(request):
-    """Update user profile."""
+    """Display and update the user profile."""
     if request.method == 'POST':
         form = UserUpdateForm(request.POST, instance=request.user)
         if form.is_valid():
@@ -31,5 +31,9 @@ def profile(request):
             return redirect('users:profile')
     else:
         form = UserUpdateForm(instance=request.user)
-    
-    return render(request, 'users/profile.html', {'form': form})
+
+    transcription_count = request.user.transcripts.count()
+    return render(request, 'users/profile.html', {
+        'form': form,
+        'transcripts_count': transcription_count,
+    })
