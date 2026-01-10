@@ -1,84 +1,446 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}DeepTranscribe - Real-time Audio Transcription{% endblock %}
+{% block title %}DeepTranscribe - AI-Powered Intelligence for Your Audio{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* --- Animations --- */
+    @keyframes float-slow {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50% { transform: translateY(-20px) scale(1.05); }
+    }
+    
+    @keyframes float-delayed {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50% { transform: translateY(-15px) scale(1.02); }
+    }
+
+    @keyframes pulse-ring {
+        0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(14, 165, 233, 0); }
+        100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
+    }
+
+    @keyframes shimmer {
+        0% { background-position: -1000px 0; }
+        100% { background-position: 1000px 0; }
+    }
+
+    /* --- Utilities --- */
+    .animate-float { animation: float-slow 8s ease-in-out infinite; }
+    .animate-float-delayed { animation: float-delayed 7s ease-in-out infinite 2s; }
+    
+    .blob {
+        position: absolute;
+        filter: blur(80px);
+        z-index: 0;
+        opacity: 0.6;
+    }
+
+    /* Light Mode Glassmorphism */
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+    }
+    
+    .glass-card-hover {
+        transition: all 0.3s ease;
+    }
+    .glass-card-hover:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+        background: rgba(255, 255, 255, 0.9);
+        border-color: rgba(14, 165, 233, 0.3); /* Primary color hint */
+    }
+
+    /* Skeleton Loading Effect */
+    .skeleton-shimmer {
+        background: #f6f7f8;
+        background-image: linear-gradient(to right, #f6f7f8 0%, #edeef1 20%, #f6f7f8 40%, #f6f7f8 100%);
+        background-repeat: no-repeat;
+        background-size: 800px 104px; 
+        animation: shimmer 1.5s infinite linear forwards;
+    }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="bg-gradient-to-r from-primary-700 to-accent-700 text-white py-16">
-    <div class="container mx-auto px-4">
-        <div class="max-w-3xl mx-auto text-center">
-            <h1 class="text-4xl md:text-5xl font-bold mb-4">Real-time Audio Transcription</h1>
-            <p class="text-xl mb-8">Convert speech to text instantly with accurate speaker identification using Deepgram's advanced AI technology.</p>
-            <div class="flex flex-wrap justify-center gap-4">
-                <a href="{% url 'core:transcribe' %}" class="px-6 py-3 bg-white text-primary-700 rounded-md font-semibold hover:bg-gray-100 transition-colors">
-                    Start Transcribing
+<div class="relative overflow-hidden bg-gray-50 text-gray-800 font-sans">
+    
+    <!-- Background Gradient Blobs (Light Theme) -->
+    <div class="blob bg-primary-200 w-96 h-96 rounded-full top-0 left-0 -translate-x-1/2 -translate-y-1/2 animate-float"></div>
+    <div class="blob bg-accent-200 w-[30rem] h-[30rem] rounded-full bottom-0 right-0 translate-x-1/3 translate-y-1/3 animate-float-delayed"></div>
+    <div class="blob bg-purple-200 w-80 h-80 rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-40"></div>
+
+    <!-- 1. HERO SECTION -->
+    <section class="relative pt-20 pb-32 lg:pt-32 lg:pb-40">
+        <div class="container mx-auto px-4 relative z-10">
+            <div class="flex flex-col lg:flex-row items-center gap-16">
+                
+                <!-- Left: Copy -->
+                <div class="lg:w-1/2 text-center lg:text-left">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-gray-200 shadow-sm mb-6 animate-fade-in-up">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-success-500"></span>
+                        </span>
+                        <span class="text-xs font-semibold text-gray-600 tracking-wide uppercase">Powered by OpenAI & Deepgram</span>
+                    </div>
+                    
+                    <h1 class="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-[1.1] mb-6">
+                        Unlock the power of <br>
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-accent-600">Spoken Intelligence</span>
+                    </h1>
+                    
+                    <p class="text-lg text-gray-600 mb-8 max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                        Go beyond simple transcription. Get sentiment analysis, speaker identification, and chat with your audio using our advanced AI assistant.
+                    </p>
+                    
+                    <div class="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+                        <a href="{% url 'core:transcribe' %}" class="px-8 py-4 rounded-xl bg-primary-600 text-white font-bold shadow-lg shadow-primary-500/30 hover:bg-primary-700 hover:shadow-primary-500/50 hover:-translate-y-1 transition-all duration-300 w-full sm:w-auto">
+                            Start Transcribing Free
+                        </a>
+                        <a href="#demo" class="px-8 py-4 rounded-xl bg-white text-gray-700 font-semibold border border-gray-200 hover:border-primary-300 hover:bg-gray-50 hover:text-primary-700 transition-all duration-300 w-full sm:w-auto shadow-sm">
+                            View Live Demo
+                        </a>
+                    </div>
+                    
+                    <div class="mt-8 flex items-center justify-center lg:justify-start gap-6 text-sm text-gray-500">
+                        <span class="flex items-center gap-1"><svg class="w-4 h-4 text-primary-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> No credit card needed</span>
+                        <span class="flex items-center gap-1"><svg class="w-4 h-4 text-primary-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> PDF & JSON Export</span>
+                    </div>
+                </div>
+
+                <!-- Right: Glass Interface Mockup -->
+                <div class="lg:w-1/2 relative w-full">
+                    <!-- Decor elements behind -->
+                    <div class="absolute -top-10 -right-10 w-24 h-24 bg-gradient-to-br from-primary-400 to-accent-400 rounded-2xl rotate-12 opacity-20 animate-float"></div>
+                    <div class="absolute -bottom-5 -left-5 w-20 h-20 bg-yellow-400 rounded-full opacity-20 animate-float-delayed"></div>
+
+                    <!-- Main App Window -->
+                    <div class="glass-panel rounded-2xl shadow-2xl overflow-hidden transform rotate-0 lg:rotate-2 hover:rotate-0 transition-transform duration-500">
+                        <!-- Toolbar -->
+                        <div class="h-12 border-b border-gray-200/50 bg-white/50 px-4 flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                                <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                                <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                            </div>
+                            <div class="text-xs font-mono text-gray-400">meeting_recording_001.mp3</div>
+                            <div class="px-2 py-0.5 rounded bg-primary-100 text-primary-700 text-[10px] font-bold">PROCESSED</div>
+                        </div>
+                        
+                        <!-- Content Body -->
+                        <div class="p-6 bg-white/40 h-[400px] overflow-y-auto no-scrollbar relative">
+                            <!-- Existing Transcript Item -->
+                            <div class="flex gap-4 mb-6 opacity-50">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500 font-bold">S1</div>
+                                <div class="space-y-1">
+                                    <p class="text-xs text-gray-500 font-bold">Speaker 1 <span class="font-normal text-gray-400">• 00:15</span></p>
+                                    <p class="text-sm text-gray-600">Can you summarize the project requirements for the new timeline feature?</p>
+                                </div>
+                            </div>
+
+                            <!-- Animated Typing Item -->
+                            <div class="flex gap-4 mb-6">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-xs text-primary-600 font-bold border border-primary-200">AI</div>
+                                <div class="space-y-2 w-full">
+                                    <p class="text-xs text-gray-500 font-bold">DeepTranscribe Bot <span class="font-normal text-gray-400">• Now</span></p>
+                                    <div class="p-3 bg-white rounded-r-xl rounded-bl-xl shadow-sm border border-gray-100">
+                                        <p class="text-sm text-gray-800 leading-relaxed" id="hero-typewriter"></p>
+                                        <span class="inline-block w-1.5 h-3 bg-primary-500 animate-pulse ml-0.5"></span>
+                                    </div>
+                                    <!-- Simulated Entity Tags -->
+                                    <div class="flex gap-2 pt-1 opacity-0 animate-fade-in-delayed" style="animation-delay: 3s; animation-fill-mode: forwards;">
+                                        <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px] border border-green-200">Sentiment: Positive</span>
+                                        <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] border border-purple-200">Entity: Project Timeline</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Floating Action Button Mockup -->
+                            <div class="absolute bottom-6 right-6">
+                                <div class="w-12 h-12 bg-primary-600 rounded-full shadow-lg shadow-primary-500/40 flex items-center justify-center text-white cursor-pointer hover:scale-110 transition-transform">
+                                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. TECH STACK / TRUST -->
+    <section class="border-y border-gray-200 bg-white/50 backdrop-blur-sm">
+        <div class="container mx-auto px-4 py-8">
+            <p class="text-center text-sm font-semibold text-gray-400 uppercase tracking-widest mb-6">Built with modern architecture</p>
+            <div class="flex flex-wrap justify-center gap-10 md:gap-16 items-center opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
+                <!-- Text based logos for simplicity, replace with SVGs if available -->
+                <span class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M2.5 12a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0z"/></svg> Deepgram
+                </span>
+                <span class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                     OpenAI
+                </span>
+                <span class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Django Channels
+                </span>
+                <span class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                     PostgreSQL
+                </span>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. INTERACTIVE FEATURE GRID (Bento Style) -->
+    <section class="py-24 relative z-10">
+        <div class="container mx-auto px-4">
+            <div class="text-center max-w-2xl mx-auto mb-16">
+                <span class="text-primary-600 font-semibold text-sm uppercase tracking-wide">Features</span>
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">Everything you need to master your audio</h2>
+                <p class="text-gray-500 text-lg">From real-time WebSocket streaming to entity extraction, we've packed DeepTranscribe with enterprise-grade tools.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[minmax(250px,auto)]">
+                
+                <!-- Large Card: Real-time -->
+                <div class="md:col-span-2 glass-panel rounded-2xl p-8 glass-card-hover relative overflow-hidden group">
+                    <div class="relative z-10">
+                        <div class="w-12 h-12 rounded-lg bg-primary-100 text-primary-600 flex items-center justify-center mb-4">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-900 mb-2">Real-Time Transcription</h3>
+                        <p class="text-gray-600 max-w-sm">Powered by Django Channels & Daphne. Stream audio via WebSockets and watch text appear instantly with low latency.</p>
+                    </div>
+                    <!-- Visual decoration -->
+                    <div class="absolute right-0 bottom-0 w-1/2 h-full opacity-10 group-hover:opacity-20 transition-opacity">
+                        <svg class="h-full w-full text-primary-600" fill="currentColor" viewBox="0 0 100 100" preserveAspectRatio="none">
+                            <path d="M0 100 C 20 0 50 0 100 100 Z" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Tall Card: Chatbot -->
+                <div class="md:row-span-2 glass-panel rounded-2xl p-8 glass-card-hover relative overflow-hidden flex flex-col">
+                    <div class="w-12 h-12 rounded-lg bg-accent-100 text-accent-600 flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">Context-Aware AI Chat</h3>
+                    <p class="text-gray-600 mb-6">Ask questions about your transcripts. "What did Speaker 2 agree to?"</p>
+                    
+                    <!-- Chat Simulation -->
+                    <div class="mt-auto bg-gray-50 rounded-xl p-4 border border-gray-100 flex-grow">
+                        <div class="space-y-3">
+                            <div class="flex justify-end">
+                                <div class="bg-primary-600 text-white text-xs py-2 px-3 rounded-l-lg rounded-tr-lg">Summarize the meeting.</div>
+                            </div>
+                            <div class="flex justify-start">
+                                <div class="bg-white border border-gray-200 text-gray-700 text-xs py-2 px-3 rounded-r-lg rounded-tl-lg shadow-sm">
+                                    <div class="flex items-center gap-1 mb-1"><span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span> <span class="text-[10px] uppercase font-bold text-gray-400">AI Assistant</span></div>
+                                    The team agreed to launch the beta by Friday.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card: Diarization -->
+                <div class="glass-panel rounded-2xl p-8 glass-card-hover">
+                    <div class="w-12 h-12 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">Speaker Diarization</h3>
+                    <p class="text-sm text-gray-600">Automatically distinguish between multiple speakers in an interview or meeting.</p>
+                </div>
+
+                <!-- Card: Exports -->
+                <div class="glass-panel rounded-2xl p-8 glass-card-hover">
+                    <div class="w-12 h-12 rounded-lg bg-green-100 text-green-600 flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">Flexible Exports</h3>
+                    <p class="text-sm text-gray-600">Download your data in JSON for developers, TXT for editing, or PDF for reporting.</p>
+                </div>
+
+                <!-- Card: Analytics -->
+                <div class="md:col-span-3 glass-panel rounded-2xl p-8 glass-card-hover flex flex-col md:flex-row items-center gap-8">
+                    <div class="flex-1">
+                        <div class="w-12 h-12 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center mb-4">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-900 mb-2">Deep Analytics</h3>
+                        <p class="text-gray-600">
+                            Visualize conversation flow. We generate sentiment graphs, extract key entities (names, dates, locations), and build a timeline of the conversation automatically.
+                        </p>
+                    </div>
+                    <!-- Analytics Visual Mockup -->
+                    <div class="w-full md:w-1/2 bg-white rounded-lg border border-gray-100 p-4 shadow-sm">
+                        <div class="flex items-end justify-between h-24 gap-2 mb-2">
+                            <div class="w-full bg-green-100 rounded-t h-[40%] hover:bg-green-200 transition-colors relative group"><div class="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 text-[10px] bg-gray-800 text-white px-1 rounded opacity-0 group-hover:opacity-100">Pos</div></div>
+                            <div class="w-full bg-green-100 rounded-t h-[60%] hover:bg-green-200 transition-colors"></div>
+                            <div class="w-full bg-gray-100 rounded-t h-[30%] hover:bg-gray-200 transition-colors"></div>
+                            <div class="w-full bg-red-100 rounded-t h-[20%] hover:bg-red-200 transition-colors"></div>
+                            <div class="w-full bg-green-100 rounded-t h-[80%] hover:bg-green-200 transition-colors"></div>
+                        </div>
+                        <div class="h-1 w-full bg-gray-100 rounded-full"></div>
+                        <div class="flex justify-between text-[10px] text-gray-400 mt-1">
+                            <span>00:00</span>
+                            <span>Timeline Sentiment</span>
+                            <span>10:00</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. HOW IT WORKS (Skeleton/Process) -->
+    <section class="py-24 bg-white/60 backdrop-blur-md border-y border-white">
+        <div class="container mx-auto px-4">
+            <h2 class="text-3xl font-bold text-center text-gray-900 mb-16">The Workflow</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+                <!-- Connector Line (Desktop) -->
+                <div class="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-gray-200 -z-10"></div>
+
+                <!-- Step 1 -->
+                <div class="relative text-center group">
+                    <div class="w-24 h-24 mx-auto bg-white rounded-full border-4 border-gray-50 shadow-lg flex items-center justify-center text-primary-600 mb-6 group-hover:border-primary-200 group-hover:scale-110 transition-all duration-300 z-10">
+                        <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">1. Record or Upload</h3>
+                    <p class="text-sm text-gray-500 px-4">Use the browser microphone or upload files (MP3/WAV).</p>
+                </div>
+
+                <!-- Step 2 (Processing) -->
+                <div class="relative text-center group">
+                    <div class="w-24 h-24 mx-auto bg-white rounded-full border-4 border-gray-50 shadow-lg flex items-center justify-center text-accent-600 mb-6 group-hover:border-accent-200 group-hover:scale-110 transition-all duration-300 z-10 overflow-hidden relative">
+                        <!-- Skeleton Animation inside bubble -->
+                        <div class="absolute inset-0 skeleton-shimmer opacity-50"></div>
+                        <svg class="w-10 h-10 relative z-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">2. AI Processing</h3>
+                    <p class="text-sm text-gray-500 px-4">Deepgram engine transcribes while OpenAI analyzes context.</p>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="relative text-center group">
+                    <div class="w-24 h-24 mx-auto bg-white rounded-full border-4 border-gray-50 shadow-lg flex items-center justify-center text-green-600 mb-6 group-hover:border-green-200 group-hover:scale-110 transition-all duration-300 z-10">
+                        <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">3. Interact & Export</h3>
+                    <p class="text-sm text-gray-500 px-4">Chat with the bot, view timelines, and download PDFs.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. USE CASES -->
+    <section class="py-24">
+        <div class="container mx-auto px-4">
+            <h2 class="text-3xl font-bold text-gray-900 mb-12 text-center">Built for every workflow</h2>
+            <div class="flex flex-col md:flex-row gap-6">
+                <div class="flex-1 bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div class="font-bold text-lg mb-2 text-primary-700">Developers</div>
+                    <p class="text-gray-600 text-sm">Integrate via REST API. Inspect JSON outputs. Test WebSockets.</p>
+                </div>
+                <div class="flex-1 bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div class="font-bold text-lg mb-2 text-accent-700">Journalists</div>
+                    <p class="text-gray-600 text-sm">Upload interviews. Identify speakers automatically. Search text instantly.</p>
+                </div>
+                <div class="flex-1 bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div class="font-bold text-lg mb-2 text-purple-700">Students</div>
+                    <p class="text-gray-600 text-sm">Record lectures. Ask the AI Chatbot to summarize key points for exams.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. DEVELOPER / API PEEK -->
+    <section class="py-20 bg-gray-900 text-white overflow-hidden relative">
+        <!-- Dark section for contrast -->
+        <div class="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800"></div>
+        <div class="container mx-auto px-4 relative z-10 flex flex-col md:flex-row items-center gap-12">
+            <div class="md:w-1/2">
+                <h2 class="text-3xl font-bold mb-4">Developer Friendly API</h2>
+                <p class="text-gray-400 mb-6">Need to integrate transcription into your own app? DeepTranscribe provides secure API endpoints with token authentication.</p>
+                <div class="flex gap-4">
+                    <span class="px-3 py-1 rounded bg-gray-800 border border-gray-700 text-xs font-mono text-green-400">GET /api/transcripts/</span>
+                    <span class="px-3 py-1 rounded bg-gray-800 border border-gray-700 text-xs font-mono text-blue-400">POST /api/chat/</span>
+                </div>
+            </div>
+            <div class="md:w-1/2 w-full">
+                <div class="bg-gray-950 rounded-lg p-4 border border-gray-700 font-mono text-xs overflow-x-auto shadow-2xl">
+<pre><span class="text-pink-500">import</span> requests
+
+token = <span class="text-green-400">"your_api_token"</span>
+files = {<span class="text-green-400">'audio'</span>: open(<span class="text-green-400">'meeting.mp3'</span>, <span class="text-green-400">'rb'</span>)}
+
+response = requests.post(
+    <span class="text-green-400">"https://deeptranscribe.com/api/upload/"</span>, 
+    headers={<span class="text-green-400">"Authorization"</span>: f<span class="text-green-400">"Token {token}"</span>},
+    files=files
+)
+
+print(response.json()[<span class="text-green-400">'transcript_id'</span>])</pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 7. CTA -->
+    <section class="py-24 relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-r from-primary-500 to-accent-500 opacity-10"></div>
+        <div class="container mx-auto px-4 relative z-10 text-center">
+            <h2 class="text-4xl font-bold text-gray-900 mb-6">Ready to transform your audio?</h2>
+            <p class="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">Join the platform that combines accurate transcription with powerful AI analysis.</p>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="{% url 'users:register' %}" class="px-10 py-4 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 shadow-lg shadow-primary-500/30 transition-all hover:-translate-y-1">
+                    Get Started Now
                 </a>
-                <a href="{% url 'core:transcript_list' %}" class="px-6 py-3 bg-transparent border-2 border-white rounded-md font-semibold hover:bg-white/10 transition-colors">
-                    View Transcripts
+                <a href="{% url 'users:login' %}" class="px-10 py-4 bg-white text-gray-700 rounded-xl font-bold border border-gray-200 hover:bg-gray-50 transition-colors">
+                    Log In
                 </a>
             </div>
         </div>
-    </div>
+    </section>
+
 </div>
 
-<div class="py-16 bg-white">
-    <div class="container mx-auto px-4">
-        <div class="text-center mb-12">
-            <h2 class="text-3xl font-bold text-gray-900 mb-4">Powerful Transcription Features</h2>
-            <p class="text-xl text-gray-600 max-w-3xl mx-auto">Our platform leverages Deepgram's advanced AI to deliver accurate, real-time transcription with speaker identification.</p>
-        </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <!-- Feature 1 -->
-            <div class="bg-gray-50 rounded-lg p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                <div class="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                </div>
-                <h3 class="text-xl font-semibold text-gray-900 mb-2">Real-time Transcription</h3>
-                <p class="text-gray-600">Convert speech to text instantly as you speak, with high accuracy even in noisy environments.</p>
-            </div>
-            
-            <!-- Feature 2 -->
-            <div class="bg-gray-50 rounded-lg p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                <div class="w-12 h-12 bg-accent-100 rounded-lg flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-accent-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                </div>
-                <h3 class="text-xl font-semibold text-gray-900 mb-2">Speaker Diarization</h3>
-                <p class="text-gray-600">Automatically identify and label different speakers in your audio for clearer conversation transcripts.</p>
-            </div>
-            
-            <!-- Feature 3 -->
-            <div class="bg-gray-50 rounded-lg p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                <div class="w-12 h-12 bg-success-100 rounded-lg flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-success-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                </div>
-                <h3 class="text-xl font-semibold text-gray-900 mb-2">Multi-language Support</h3>
-                <p class="text-gray-600">Transcribe audio in multiple languages with automatic language detection capabilities.</p>
-            </div>
-        </div>
-    </div>
-</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const text = "We've analyzed the sales call. The customer sentiment was positive, and they showed strong interest in the Enterprise plan during the 15-minute mark.";
+        const element = document.getElementById('hero-typewriter');
+        let index = 0;
 
-<div class="bg-gradient-to-r from-accent-700 to-primary-700 text-white py-16">
-    <div class="container mx-auto px-4 text-center">
-        <h2 class="text-3xl font-bold mb-4">Ready to Start Transcribing?</h2>
-        <p class="text-xl mb-8 max-w-3xl mx-auto">Sign up now to get started with our powerful transcription platform. Convert speech to text with speaker identification in real-time.</p>
-        <div class="flex flex-wrap justify-center gap-4">
-            <a href="{% url 'users:register' %}" class="px-6 py-3 bg-white text-primary-700 rounded-md font-semibold hover:bg-gray-100 transition-colors">
-                Sign Up Now
-            </a>
-            <a href="{% url 'core:transcribe' %}" class="px-6 py-3 bg-transparent border-2 border-white rounded-md font-semibold hover:bg-white/10 transition-colors">
-                Try It Out
-            </a>
-        </div>
-    </div>
-</div>
+        function typeWriter() {
+            if (index < text.length) {
+                element.innerHTML += text.charAt(index);
+                index++;
+                setTimeout(typeWriter, 40);
+            } else {
+                // Pause then restart
+                setTimeout(() => {
+                    element.innerHTML = '';
+                    index = 0;
+                    typeWriter();
+                }, 6000);
+            }
+        }
+
+        // Start delay
+        setTimeout(typeWriter, 1500);
+    });
+</script>
 {% endblock %}
 
 {% block footer %}
