@@ -1,4 +1,5 @@
 import logging
+import uuid
 from django.conf import settings
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes
@@ -73,21 +74,35 @@ def app_settings(request):
     })
 
 
-class ChatbotAPIView(APIView):
-    """API view to handle chatbot requests using Gemini API with chat memory and vector store."""
+class ChatbotView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes = [JSONParser]
 
-    def post(self, request, *args, **kwargs):
-        user = request.user
-        user_message = request.data.get('message', '')
+    def post(self, request):
+        user_message = request.data.get('message')
+
+        # Get session_id from frontend, or generate a temporary one if missing
+        session_id = request.data.get('session_id')
+
+        if not session_id:
+             # Option A: Error if frontend MUST send it
+             # return Response({"error": "session_id is required"}, status=400)
+
+             # Option B: Generate one (starts a new session every time session_id is missing)
+             session_id = str(uuid.uuid4())
+
         if not user_message:
-            return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Message is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        chatbot_service = ChatbotService(user)
         try:
-            answer = chatbot_service.generate_response(user_message)
-            return Response({'response': answer})
+            # PASS THE SESSION_ID HERE
+            chatbot_service = ChatbotService(request.user, session_id=session_id)
+
+            response_text = chatbot_service.generate_response(user_message)
+
+            return Response({
+                "response": response_text,
+                "session_id": session_id # Return it so frontend can save it
+            }, status=status.HTTP_200_OK)
+
         except Exception as e:
-            logging.error(f"Error in ChatbotAPIView: {e}")
-            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

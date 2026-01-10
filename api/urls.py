@@ -11,5 +11,5 @@ app_name = 'api'
 urlpatterns = [
     path('', include(router.urls)),
     path('settings/', views.app_settings, name='settings'),
-    path('chatbot/', views.ChatbotAPIView.as_view(), name='chatbot'),
+    path('chatbot/', views.ChatbotView.as_view(), name='chatbot'),
 ]

@@ -2,43 +2,67 @@ import numpy as np
 import google.genai as genai
 from django.conf import settings
 from django.db.models import Q
-from .models import ChatMessage, ChatMessageEmbedding
-from core.models import Transcript, TranscriptEmbedding, TranscriptSegment
-import re
-from datetime import datetime, timedelta
+from typing import List, Dict, Optional, Any
 import logging
-from typing import List, Dict, Tuple, Optional, Any
+from datetime import datetime
+import re
+
+# Import your models. 
+# Ensure ChatSession exists in your models.py with fields like 'session_id', 'user', and 'summary'
+from .models import ChatMessage, ChatMessageEmbedding, ChatSession
+from core.models import Transcript, TranscriptEmbedding
 
 logger = logging.getLogger(__name__)
 
 class ChatbotService:
-    def __init__(self, user):
+    def __init__(self, user, session_id: str):
+        """
+        Initializes the service for a specific user and chat session.
+        
+        Args:
+            user: The Django User instance.
+            session_id (str): Unique identifier for the current chat conversation.
+        """
         self.user = user
-        # Initialize the Google GenAI Client (v1.0+ SDK)
+        self.session_id = session_id
+        
+        # Initialize the Google GenAI Client
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
         # --- Model Configuration ---
         self.embedding_model = "models/text-embedding-004"
         
-        # Main Model: Gemma 3 27B IT (as requested)
+        # Main Model: Handles complex logic and user interaction
         self.chat_model_name = "gemma-3-27b-it" 
         
         # Utility Model: Used for background summarization (Fast/Cheap)
-        # We use Flash-Lite here to keep latency low while Gemma handles the complex logic
         self.summary_model_name = "gemma-3-12b-it"
 
         # --- Memory Settings ---
-        self.buffer_window_size = 6     # Keep last 6 messages raw (Short-term memory)
-        self.summary_window_lookback = 20 # Look back 20 messages for summary (Long-term memory)
+        self.buffer_window_size = 6     # Keep last 6 messages raw in context
         
         # --- RAG Settings ---
         self.retrieval_threshold = 0.45 
         self.top_k = 10 
 
+        # Retrieve or create the session object to access persistent summary
+        # Assumes ChatSession model has: user, session_id, and summary (TextField)
+        self.chat_session, _ = ChatSession.objects.get_or_create(
+            user=self.user, 
+            session_id=self.session_id
+        )
+
     def generate_response(self, user_message: str) -> str:
-        """Main entry point for generating a response."""
+        """
+        Main entry point.
+        1. Saves User Message.
+        2. Builds Context (RAG + Session Memory).
+        3. Generates AI Response.
+        4. Saves AI Response.
+        5. Updates Session Summary (Background step).
+        """
         try:
-            # 1. Save User Message immediately
+            # 1. Save User Message immediately (linked to session)
             self._save_message(user_message, "user")
 
             # 2. Check for Specific Commands (Data/Metadata queries)
@@ -51,22 +75,20 @@ class ChatbotService:
             # A. RAG Context (External Knowledge from Transcripts)
             rag_context = self._build_rag_context(user_message)
             
-            # B. Conversation Memory (Internal Context from Chat History)
-            # Returns { 'summary': "User previously asked X...", 'buffer': [...] }
+            # B. Conversation Memory (Current Session Only)
             memory_context = self._build_conversation_memory()
 
             # 4. Construct System Prompt
             system_prompt = self._build_system_prompt()
 
-            # 5. Construct Final Prompt with Explicit Sections
-            # Gemma 2/3 instruction models respond well to clear delimiters
+            # 5. Construct Final Prompt
             final_prompt_parts = [
                 f"{system_prompt}\n",
                 
-                "### CONTEXT: LONG TERM MEMORY (Summary of past conversation)",
-                f"{memory_context['summary'] if memory_context['summary'] else 'No previous context.'}",
+                "### CONTEXT: LONG TERM MEMORY (Summary of this session so far)",
+                f"{memory_context['summary'] if memory_context['summary'] else 'No previous context summary available yet.'}",
                 
-                "\n### CONTEXT: RETRIEVED TRANSCRIPTS (RAG Data)",
+                "\n### CONTEXT: RETRIEVED TRANSCRIPTS (Reference Data)",
                 f"{rag_context if rag_context else 'No specific transcript data found.'}",
                 
                 "\n### CONTEXT: RECENT CHAT BUFFER (Immediate History)"
@@ -88,7 +110,7 @@ class ChatbotService:
                 model=self.chat_model_name,
                 contents=final_prompt,
                 config={
-                    'temperature': 0.7, # Balanced creativity
+                    'temperature': 0.7, 
                     'top_p': 0.95,
                     'top_k': 40,
                 }
@@ -99,6 +121,10 @@ class ChatbotService:
             # 7. Save Assistant Response
             self._save_message(answer, "assistant")
 
+            # 8. POST-GENERATION: Update Summary for the *next* turn
+            # This logic happens after we have the answer, preparing memory for the future.
+            self._update_session_summary()
+
             return answer
 
         except Exception as e:
@@ -107,74 +133,75 @@ class ChatbotService:
 
     def _build_conversation_memory(self) -> Dict[str, Any]:
         """
-        Splits chat history into:
-        1. Buffer: Raw text of the last N messages (High fidelity).
-        2. Summary: A generated summary of messages prior to the buffer (Low fidelity).
+        Retrieves:
+        1. The stored summary from the DB (created after the LAST turn).
+        2. The raw buffer of recent messages for THIS session.
         """
-        total_fetch = self.buffer_window_size + self.summary_window_lookback
-        
-        # Get messages in reverse chronological order (newest first)
-        recent_msgs = ChatMessage.objects.filter(user=self.user).order_by('-timestamp')[:total_fetch]
-        
-        # Convert to list and reverse to chronological order (oldest first)
+        # CHANGED: Filter by session=self.chat_session instead of session_id=...
+        recent_msgs = ChatMessage.objects.filter(
+            user=self.user,
+            session=self.chat_session  # Use the object, not the ID string
+        ).order_by('-timestamp')[:self.buffer_window_size]
+
+        # Convert to list and reverse to chronological order (oldest -> newest)
         msgs_list = list(reversed(recent_msgs))
-        
-        if not msgs_list:
-            return {'summary': "", 'buffer': []}
 
-        # Slicing
-        # The buffer is the last N messages
-        buffer_msgs = msgs_list[-self.buffer_window_size:] if len(msgs_list) > self.buffer_window_size else msgs_list
-        
-        # The items to summarize are everything before the buffer
-        to_summarize_msgs = msgs_list[:-self.buffer_window_size] if len(msgs_list) > self.buffer_window_size else []
+        buffer_data = [{'role': m.role, 'content': m.content} for m in msgs_list]
 
-        # Generate Summary Memory
-        summary_text = ""
-        if to_summarize_msgs:
-            summary_text = self._generate_history_summary(to_summarize_msgs)
-
-        # Format Buffer Memory
-        buffer_data = [{'role': m.role, 'content': m.content} for m in buffer_msgs]
-        
-        # Exclude the current user message (it was just saved, we add it manually to end of prompt)
+        # Exclude the current user message (it was just saved, but we add it manually to prompt)
         if buffer_data and buffer_data[-1]['role'] == 'user':
             buffer_data.pop()
 
         return {
-            'summary': summary_text,
+            'summary': self.chat_session.summary, # Use the persisted summary field
             'buffer': buffer_data
         }
 
-    def _generate_history_summary(self, messages: List[ChatMessage]) -> str:
+    def _update_session_summary(self):
         """
-        Uses a lightweight model to summarize older conversation turns.
+        Generates a summary of the current session history and saves it to the ChatSession model.
+        This allows the context to "compress" as the conversation grows.
         """
-        if not messages:
-            return ""
-            
-        conversation_text = "\n".join([f"{m.role.upper()}: {m.content}" for m in messages])
-        
-        prompt = (
-            "Summarize the following conversation history concisely in 3-4 sentences. "
-            "Focus strictly on the facts, specific entities discussed, and user questions. "
-            "Ignore pleasantries.\n\n"
-            f"{conversation_text}"
-        )
-
         try:
-            # Use Flash-Lite for fast summarization
+            # Fetch entire history for this session to ensure continuity
+            # In production, you might want to fetch only the last 50 messages + previous summary
+            messages = ChatMessage.objects.filter(
+                user=self.user,
+                session=self.chat_session # CHANGED: Filter by object
+            ).order_by('timestamp')
+
+            if messages.count() < 2:
+                # Not enough content to summarize meaningfully
+                return
+
+            conversation_text = "\n".join([f"{m.role.upper()}: {m.content}" for m in messages])
+            
+            prompt = (
+                "You are a background process updating the memory for a chatbot. "
+                "Summarize the following conversation clearly. "
+                "Include key facts, user goals, and specific questions asked. "
+                "Do not include meta-commentary like 'The conversation started with'. "
+                "Just state the facts.\n\n"
+                f"Conversation:\n{conversation_text}"
+            )
+
+            # Use the lighter model for this background task
             response = self.client.models.generate_content(
                 model=self.summary_model_name,
                 contents=prompt
             )
-            return response.text.strip()
+            
+            new_summary = response.text.strip()
+
+            # Save to Database
+            self.chat_session.summary = new_summary
+            self.chat_session.save(update_fields=['summary'])
+
         except Exception as e:
-            logger.warning(f"Failed to generate history summary: {e}")
-            return ""
+            logger.warning(f"Failed to update session summary: {e}")
 
     def _build_rag_context(self, query: str) -> str:
-        """RAG Logic: Retrieve Transcript segments."""
+        """Retrieves relevant segments from Transcripts."""
         query_embedding = self._get_embedding(query)
         if not query_embedding: return ""
 
@@ -188,6 +215,7 @@ class ChatbotService:
         return "\n".join(context_parts)
 
     def _vector_search_transcripts(self, query_vec: List[float]) -> List[Dict]:
+        """Performs cosine similarity search on Transcript embeddings."""
         embeddings_qs = TranscriptEmbedding.objects.filter(
             transcript__user=self.user
         ).select_related('segment', 'transcript').values(
@@ -204,7 +232,8 @@ class ChatbotService:
 
         query_vec_np = np.array(query_vec)
         matrix = np.array(vectors)
-        # Assuming embeddings are normalized
+        
+        # Calculate Dot Product (assuming normalized embeddings)
         scores = np.dot(matrix, query_vec_np)
         
         top_indices = np.argsort(scores)[-self.top_k:][::-1]
@@ -223,6 +252,7 @@ class ChatbotService:
         return results
 
     def _handle_specific_commands(self, text: str) -> Optional[str]:
+        """Checks for metadata queries not requiring LLM generation."""
         text = text.lower()
         if any(x in text for x in ['list all transcripts', 'show my transcripts', 'list my sessions']):
             transcripts = Transcript.objects.filter(user=self.user).order_by('-created_at')[:20]
@@ -233,10 +263,10 @@ class ChatbotService:
                 lines.append(f"• **{t.title}** ({t.created_at.strftime('%b %d, %Y %I:%M %p')})")
             return "\n".join(lines)
 
+        # Handle specific transcript summaries (e.g., "Summarize the meeting about Budget")
         summary_match = re.search(r'(?:summarize|summary of|summary for) (.*)', text)
         if summary_match and 'last' not in text:
             raw_target = summary_match.group(1).strip()
-            # Stop words to clean up "Summarize the transcript about X"
             stop_words = {'my', 'the', 'a', 'an', 'this', 'session', 'transcript', 'meeting'}
             clean_tokens = [t for t in raw_target.split() if t not in stop_words]
             clean_query = " ".join(clean_tokens).strip()
@@ -250,6 +280,7 @@ class ChatbotService:
         return None
 
     def _generate_multi_transcript_summary(self, transcripts) -> str:
+        """Helper to summarize full transcripts via RAG/LLM."""
         response_parts = []
         count = transcripts.count()
         response_parts.append(f"Found {count} transcript{'s' if count > 1 else ''} matching your request.\n")
@@ -261,10 +292,10 @@ class ChatbotService:
                 response_parts.append("*(Empty)*\n")
                 continue
             
-            full_text = "\n".join([f"{s.speaker}: {s.text}" for s in segments])[:20000] # Cap context
+            # Cap context to avoid token limits
+            full_text = "\n".join([f"{s.speaker}: {s.text}" for s in segments])[:20000] 
             
             try:
-                # Use the main intelligent model for detailed transcript summarization
                 prompt = f"Summarize key topics, decisions, and action items for this transcript:\n{full_text}"
                 resp = self.client.models.generate_content(
                     model=self.chat_model_name, 
@@ -281,13 +312,11 @@ class ChatbotService:
         recent_list = ", ".join([f"'{t.title}' ({t.created_at.date()})" for t in recent])
 
         return (
-            f"You are an intelligent assistant for user {self.user.username}."
-            f"Today is {datetime.now().strftime('%Y-%m-%d')}."
-            f"User's Recent Transcripts: [{recent_list}]."
-            "Your inputs include 'Long Term Memory' (summaries of past chat), "
-            "'Retrieved Transcripts' (RAG data), and 'Chat Buffer' (immediate conversation)."
-            "Prioritize the Retrieved Transcripts for factual questions about files. "
-            "Use Chat Buffer to understand immediate context."
+            f"You are an intelligent assistant for user {self.user.username}. "
+            f"Today is {datetime.now().strftime('%Y-%m-%d')}. "
+            f"User's Recent Transcripts available in DB: [{recent_list}]. "
+            "Use the provided 'Retrieved Transcripts' to answer factual questions about files. "
+            "Use 'Chat Buffer' and 'Memory' to maintain conversation flow."
         )
 
     def _get_embedding(self, text: str) -> Optional[List[float]]:
@@ -303,8 +332,15 @@ class ChatbotService:
             return None
 
     def _save_message(self, content: str, role: str):
-        msg = ChatMessage.objects.create(user=self.user, role=role, content=content)
-        # Only embed user messages or meaningful assistant responses for future search
+        """Saves message with link to the current session_id."""
+        msg = ChatMessage.objects.create(
+            user=self.user,
+            session=self.chat_session, # CHANGED: Pass the model instance
+            role=role,
+            content=content
+        )
+        
+        # Only embed user messages or meaningful assistant responses
         if role == 'user' or len(content) > 50:
             emb = self._get_embedding(content)
             if emb:
