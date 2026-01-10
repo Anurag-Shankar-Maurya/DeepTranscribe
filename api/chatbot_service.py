@@ -14,58 +14,89 @@ logger = logging.getLogger(__name__)
 class ChatbotService:
     def __init__(self, user):
         self.user = user
+        # Initialize the Google GenAI Client (v1.0+ SDK)
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-        # Use a lightweight model for embeddings, standard for chat
+        # --- Model Configuration ---
         self.embedding_model = "models/text-embedding-004"
-        self.chat_model_name = "gemma-3-27b-it"
+        
+        # Main Model: Gemma 3 27B IT (as requested)
+        self.chat_model_name = "gemma-3-27b-it" 
+        
+        # Utility Model: Used for background summarization (Fast/Cheap)
+        # We use Flash-Lite here to keep latency low while Gemma handles the complex logic
+        self.summary_model_name = "gemma-3-12b-it"
 
-        self.retrieval_threshold = 0.45  # Stricter threshold to reduce noise
-        self.top_k = 10  # Number of segments to retrieve
+        # --- Memory Settings ---
+        self.buffer_window_size = 6     # Keep last 6 messages raw (Short-term memory)
+        self.summary_window_lookback = 20 # Look back 20 messages for summary (Long-term memory)
+        
+        # --- RAG Settings ---
+        self.retrieval_threshold = 0.45 
+        self.top_k = 10 
 
     def generate_response(self, user_message: str) -> str:
         """Main entry point for generating a response."""
         try:
             # 1. Save User Message immediately
-            user_chat_obj = self._save_message(user_message, "user")
+            self._save_message(user_message, "user")
 
             # 2. Check for Specific Commands (Data/Metadata queries)
-            # This prevents the LLM from hallucinating lists or dates
             command_response = self._handle_specific_commands(user_message)
             if command_response:
                 self._save_message(command_response, "assistant")
                 return command_response
 
-            # 3. Perform RAG (Retrieval Augmented Generation)
-            context_text = self._build_rag_context(user_message)
+            # 3. Build Contexts
+            # A. RAG Context (External Knowledge from Transcripts)
+            rag_context = self._build_rag_context(user_message)
+            
+            # B. Conversation Memory (Internal Context from Chat History)
+            # Returns { 'summary': "User previously asked X...", 'buffer': [...] }
+            memory_context = self._build_conversation_memory()
 
-            # 4. Generate LLM Response
+            # 4. Construct System Prompt
             system_prompt = self._build_system_prompt()
 
-            # Get recent conversation history (last 5 messages for flow)
-            history = self._get_recent_history()
+            # 5. Construct Final Prompt with Explicit Sections
+            # Gemma 2/3 instruction models respond well to clear delimiters
+            final_prompt_parts = [
+                f"{system_prompt}\n",
+                
+                "### CONTEXT: LONG TERM MEMORY (Summary of past conversation)",
+                f"{memory_context['summary'] if memory_context['summary'] else 'No previous context.'}",
+                
+                "\n### CONTEXT: RETRIEVED TRANSCRIPTS (RAG Data)",
+                f"{rag_context if rag_context else 'No specific transcript data found.'}",
+                
+                "\n### CONTEXT: RECENT CHAT BUFFER (Immediate History)"
+            ]
 
-            # Create chat session
-            chat = self.client.chats.create(
-                model=self.chat_model_name
+            # Add the recent chat buffer (User/Model turns)
+            for msg in memory_context['buffer']:
+                role_label = "User" if msg['role'] == 'user' else "Model"
+                final_prompt_parts.append(f"{role_label}: {msg['content']}")
+
+            # Add current question
+            final_prompt_parts.append(f"\nUser: {user_message}")
+            final_prompt_parts.append("Model:")
+
+            final_prompt = "\n".join(final_prompt_parts)
+
+            # 6. Generate Response using Gemma 3 27B
+            response = self.client.models.generate_content(
+                model=self.chat_model_name,
+                contents=final_prompt,
+                config={
+                    'temperature': 0.7, # Balanced creativity
+                    'top_p': 0.95,
+                    'top_k': 40,
+                }
             )
-
-            # Add history if any
-            for h in history:
-                # Note: history format might need adjustment
-                pass  # For now, skip history to avoid complexity
-
-            # Construct the final prompt with context and system instruction
-            final_prompt = (
-                f"{system_prompt}\n\n"
-                f"CONTEXT FROM TRANSCRIPTS AND MEMORY:\n{context_text}\n\n"
-                f"CURRENT USER QUESTION: {user_message}"
-            )
-
-            response = chat.send_message(final_prompt)
+            
             answer = response.text.strip()
 
-            # 5. Save Assistant Response
+            # 7. Save Assistant Response
             self._save_message(answer, "assistant")
 
             return answer
@@ -74,94 +105,89 @@ class ChatbotService:
             logger.error(f"Error in ChatbotService: {e}", exc_info=True)
             return "I apologize, but I encountered an error processing your request."
 
-    def _handle_specific_commands(self, text: str) -> Optional[str]:
+    def _build_conversation_memory(self) -> Dict[str, Any]:
         """
-        Handles explicit requests for metadata, lists, or summaries.
+        Splits chat history into:
+        1. Buffer: Raw text of the last N messages (High fidelity).
+        2. Summary: A generated summary of messages prior to the buffer (Low fidelity).
         """
-        text = text.lower()
-
-        # Command: List transcripts
-        if any(x in text for x in ['list all transcripts', 'show my transcripts', 'list my sessions']):
-            transcripts = Transcript.objects.filter(user=self.user).order_by('-created_at')[:20]
-            if not transcripts:
-                return "You don't have any transcript sessions yet."
-            
-            lines = ["Here are your most recent sessions:"]
-            for t in transcripts:
-                lines.append(f"• **{t.title}** ({t.created_at.strftime('%b %d, %Y %I:%M %p')})")
-            return "\n".join(lines)
-
-        # Command: Summary of specific transcript(s)
-        # 1. Regex to capture everything after the summarize command
-        summary_match = re.search(r'(?:summarize|summary of|summary for) (.*)', text)
+        total_fetch = self.buffer_window_size + self.summary_window_lookback
         
-        if summary_match and 'last' not in text:
-            raw_target = summary_match.group(1).strip()
+        # Get messages in reverse chronological order (newest first)
+        recent_msgs = ChatMessage.objects.filter(user=self.user).order_by('-timestamp')[:total_fetch]
+        
+        # Convert to list and reverse to chronological order (oldest first)
+        msgs_list = list(reversed(recent_msgs))
+        
+        if not msgs_list:
+            return {'summary': "", 'buffer': []}
+
+        # Slicing
+        # The buffer is the last N messages
+        buffer_msgs = msgs_list[-self.buffer_window_size:] if len(msgs_list) > self.buffer_window_size else msgs_list
+        
+        # The items to summarize are everything before the buffer
+        to_summarize_msgs = msgs_list[:-self.buffer_window_size] if len(msgs_list) > self.buffer_window_size else []
+
+        # Generate Summary Memory
+        summary_text = ""
+        if to_summarize_msgs:
+            summary_text = self._generate_history_summary(to_summarize_msgs)
+
+        # Format Buffer Memory
+        buffer_data = [{'role': m.role, 'content': m.content} for m in buffer_msgs]
+        
+        # Exclude the current user message (it was just saved, we add it manually to end of prompt)
+        if buffer_data and buffer_data[-1]['role'] == 'user':
+            buffer_data.pop()
+
+        return {
+            'summary': summary_text,
+            'buffer': buffer_data
+        }
+
+    def _generate_history_summary(self, messages: List[ChatMessage]) -> str:
+        """
+        Uses a lightweight model to summarize older conversation turns.
+        """
+        if not messages:
+            return ""
             
-            # 2. Define a list of "noise" words that usually aren't part of the unique title
-            stop_words = {
-                'my', 'the', 'a', 'an', 'this', 'that', 'these', 'those',
-                'conversation', 'conversations', 'session', 'sessions', 'meeting', 'meetings',
-                'transcript', 'transcripts', 'chat', 'chats',
-                'with', 'about', 'for', 'of', 'both', 'all'
-            }
+        conversation_text = "\n".join([f"{m.role.upper()}: {m.content}" for m in messages])
+        
+        prompt = (
+            "Summarize the following conversation history concisely in 3-4 sentences. "
+            "Focus strictly on the facts, specific entities discussed, and user questions. "
+            "Ignore pleasantries.\n\n"
+            f"{conversation_text}"
+        )
 
-            # 3. Tokenize and remove stop words
-            tokens = raw_target.split()
-            clean_tokens = [t for t in tokens if t not in stop_words]
-            clean_query = " ".join(clean_tokens).strip()
-
-            if not clean_query:
-                # If they just said "Summarize this", and we can't extract a name,
-                # we fail gracefully (or you could default to the most recent).
-                return "Please specify the name of the person or topic you want to summarize."
-
-            # 4. Find ALL matching transcripts (handling "both" implicitly)
-            transcripts = Transcript.objects.filter(user=self.user, title__icontains=clean_query).order_by('-created_at')
-
-            if transcripts.exists():
-                return self._generate_multi_transcript_summary(transcripts)
-            else:
-                 return f"I couldn't find any transcripts with the title containing '{clean_query}'."
-
-        return None
-
-    def _build_rag_context(self, query: str) -> str:
-        """Retrieves relevant transcript segments and chat history via Vector Search."""
-        query_embedding = self._get_embedding(query)
-        if not query_embedding:
+        try:
+            # Use Flash-Lite for fast summarization
+            response = self.client.models.generate_content(
+                model=self.summary_model_name,
+                contents=prompt
+            )
+            return response.text.strip()
+        except Exception as e:
+            logger.warning(f"Failed to generate history summary: {e}")
             return ""
 
-        # 1. Search Transcript Segments
+    def _build_rag_context(self, query: str) -> str:
+        """RAG Logic: Retrieve Transcript segments."""
+        query_embedding = self._get_embedding(query)
+        if not query_embedding: return ""
+
         relevant_segments = self._vector_search_transcripts(query_embedding)
-
-        # 2. Search Past Chat History (Long-term memory)
-        relevant_chats = self._vector_search_chats(query_embedding)
-
+        
         context_parts = []
-
         if relevant_segments:
-            context_parts.append("RELEVANT TRANSCRIPT SEGMENTS:")
             for seg in relevant_segments:
-                # Format: [Title - Date] Speaker: Text
-                meta = f"[{seg['title']} - {seg['date']}]"
-                context_parts.append(f"{meta} Speaker {seg['speaker']}: {seg['text']}")
-
-        if relevant_chats:
-            context_parts.append("\nRELEVANT PAST CONVERSATIONS:")
-            for chat in relevant_chats:
-                context_parts.append(f"{chat['role'].upper()}: {chat['content']}")
-
-        if not context_parts:
-            return "No specific documents found relevant to this query. Answer based on general knowledge or recent context."
-
+                context_parts.append(f"File: '{seg['title']}' ({seg['date']}) | Speaker {seg['speaker']}: \"{seg['text']}\"")
+        
         return "\n".join(context_parts)
 
     def _vector_search_transcripts(self, query_vec: List[float]) -> List[Dict]:
-        """
-        Optimized vector search using NumPy matrix multiplication.
-        """
-        # Fetch all embeddings for this user (optimize this with pgvector in production)
         embeddings_qs = TranscriptEmbedding.objects.filter(
             transcript__user=self.user
         ).select_related('segment', 'transcript').values(
@@ -169,27 +195,18 @@ class ChatbotService:
             'transcript__title', 'transcript__created_at', 'embedding'
         )
 
-        if not embeddings_qs:
-            return []
+        if not embeddings_qs: return []
 
-        # Convert to separate lists for vectorization
         data_list = list(embeddings_qs)
         vectors = [item['embedding'] for item in data_list]
 
-        if not vectors:
-            return []
-
-        # Calculate Cosine Similarity
-        # Similarity = (A . B) / (||A|| * ||B||)
-        # Note: If embeddings are normalized (Google's usually are), dot product is enough.
-        # We assume normalized for speed, otherwise divide by norms.
+        if not vectors: return []
 
         query_vec_np = np.array(query_vec)
         matrix = np.array(vectors)
-
+        # Assuming embeddings are normalized
         scores = np.dot(matrix, query_vec_np)
-
-        # Get top K indices
+        
         top_indices = np.argsort(scores)[-self.top_k:][::-1]
 
         results = []
@@ -203,107 +220,75 @@ class ChatbotService:
                     'date': item['transcript__created_at'].strftime('%Y-%m-%d'),
                     'score': scores[idx]
                 })
-
         return results
 
-    def _vector_search_chats(self, query_vec: List[float]) -> List[Dict]:
-        """Search past chat messages for context."""
-        # Exclude the message just sent
-        qs = ChatMessageEmbedding.objects.filter(
-            chat_message__user=self.user
-        ).exclude(chat_message__content=self.user_current_msg_content if hasattr(self, 'user_current_msg_content') else "").select_related('chat_message')
+    def _handle_specific_commands(self, text: str) -> Optional[str]:
+        text = text.lower()
+        if any(x in text for x in ['list all transcripts', 'show my transcripts', 'list my sessions']):
+            transcripts = Transcript.objects.filter(user=self.user).order_by('-created_at')[:20]
+            if not transcripts:
+                return "You don't have any transcript sessions yet."
+            lines = ["Here are your most recent sessions:"]
+            for t in transcripts:
+                lines.append(f"• **{t.title}** ({t.created_at.strftime('%b %d, %Y %I:%M %p')})")
+            return "\n".join(lines)
 
-        if not qs.exists():
-            return []
-
-        data = list(qs.values('chat_message__role', 'chat_message__content', 'embedding'))
-        vectors = np.array([d['embedding'] for d in data])
-        query_vec_np = np.array(query_vec)
-
-        scores = np.dot(vectors, query_vec_np)
-        top_indices = np.argsort(scores)[-5:][::-1] # Top 5 chats
-
-        results = []
-        for idx in top_indices:
-            if scores[idx] > self.retrieval_threshold:
-                item = data[idx]
-                results.append({
-                    'role': item['chat_message__role'],
-                    'content': item['chat_message__content']
-                })
-        return results
+        summary_match = re.search(r'(?:summarize|summary of|summary for) (.*)', text)
+        if summary_match and 'last' not in text:
+            raw_target = summary_match.group(1).strip()
+            # Stop words to clean up "Summarize the transcript about X"
+            stop_words = {'my', 'the', 'a', 'an', 'this', 'session', 'transcript', 'meeting'}
+            clean_tokens = [t for t in raw_target.split() if t not in stop_words]
+            clean_query = " ".join(clean_tokens).strip()
+            
+            if not clean_query: return "Please specify a name or topic to summarize."
+            
+            transcripts = Transcript.objects.filter(user=self.user, title__icontains=clean_query).order_by('-created_at')
+            if transcripts.exists():
+                return self._generate_multi_transcript_summary(transcripts)
+            return f"No transcripts found matching '{clean_query}'."
+        return None
 
     def _generate_multi_transcript_summary(self, transcripts) -> str:
-        """
-        Summarizes a queryset of transcripts.
-        If multiple are found (e.g. "both Bipul sessions"), it generates a combined output.
-        """
         response_parts = []
         count = transcripts.count()
-
         response_parts.append(f"Found {count} transcript{'s' if count > 1 else ''} matching your request.\n")
 
         for transcript in transcripts:
-            # Format the header
-            response_parts.append(f"### Summary for: {transcript.title} ({transcript.created_at.strftime('%b %d')})")
-
-            # Get segments
+            response_parts.append(f"### {transcript.title} ({transcript.created_at.strftime('%b %d')})")
             segments = transcript.segments.all().order_by('start_time')
             if not segments.exists():
-                response_parts.append("*(This transcript appears to be empty)*\n")
+                response_parts.append("*(Empty)*\n")
                 continue
-
-            full_text = "\n".join([f"{s.speaker}: {s.text}" for s in segments])
-
-            # Context limit safeguard
-            prompt = f"""
-            Analyze the following transcript titled "{transcript.title}".
-            Provide a concise summary, listing key topics discussed and any action items.
-
-            TRANSCRIPT:
-            {full_text[:20000]}
-            """
-
+            
+            full_text = "\n".join([f"{s.speaker}: {s.text}" for s in segments])[:20000] # Cap context
+            
             try:
-                llm_response = self.client.models.generate_content(
-                    model=self.chat_model_name,
+                # Use the main intelligent model for detailed transcript summarization
+                prompt = f"Summarize key topics, decisions, and action items for this transcript:\n{full_text}"
+                resp = self.client.models.generate_content(
+                    model=self.chat_model_name, 
                     contents=prompt
                 )
-                response_parts.append(llm_response.text + "\n")
-            except Exception as e:
-                logger.error(f"Summary generation failed for transcript {transcript.id}: {e}")
-                response_parts.append("*(Could not generate summary for this specific session due to an error)*\n")
+                response_parts.append(resp.text + "\n")
+            except Exception:
+                response_parts.append("*(Error generating summary)*\n")
 
         return "\n".join(response_parts)
 
     def _build_system_prompt(self) -> str:
-        """
-        Constructs a system prompt that gives the LLM 'Meta-Awareness'
-        of the user's data environment.
-        """
-        # Get a list of recent transcript titles to ground the AI
         recent = Transcript.objects.filter(user=self.user).order_by('-created_at')[:5]
         recent_list = ", ".join([f"'{t.title}' ({t.created_at.date()})" for t in recent])
 
         return (
-            f"You are an intelligent assistant for user {self.user.username}. "
-            f"Current Date: {datetime.now().strftime('%Y-%m-%d')}. "
-            f"The user has recently recorded these transcripts: [{recent_list}]. "
-            "Your Goal: Answer questions using the provided Context. "
-            "If the answer is found in the Context, cite the transcript title. "
-            "If the user asks for a summary or list that you cannot generate from context, "
-            "politely suggest they use specific keywords like 'list transcripts'."
+            f"You are an intelligent assistant for user {self.user.username}."
+            f"Today is {datetime.now().strftime('%Y-%m-%d')}."
+            f"User's Recent Transcripts: [{recent_list}]."
+            "Your inputs include 'Long Term Memory' (summaries of past chat), "
+            "'Retrieved Transcripts' (RAG data), and 'Chat Buffer' (immediate conversation)."
+            "Prioritize the Retrieved Transcripts for factual questions about files. "
+            "Use Chat Buffer to understand immediate context."
         )
-
-    def _get_recent_history(self) -> List[Dict]:
-        """Fetch strict chronological history for the LLM session."""
-        msgs = ChatMessage.objects.filter(user=self.user).order_by('-timestamp')[:6]
-        history = []
-        for m in reversed(msgs):
-            # Gemini format
-            role = "user" if m.role == "user" else "model"
-            history.append({"role": role, "parts": [m.content]})
-        return history
 
     def _get_embedding(self, text: str) -> Optional[List[float]]:
         try:
@@ -318,19 +303,10 @@ class ChatbotService:
             return None
 
     def _save_message(self, content: str, role: str):
-        """Saves message to DB and generates embedding."""
-        if role == 'user':
-            self.user_current_msg_content = content # store for exclusion logic
-
-        msg = ChatMessage.objects.create(
-            user=self.user,
-            role=role,
-            content=content
-        )
-
-        # Generate embedding for future retrieval
-        emb = self._get_embedding(content)
-        if emb:
-            ChatMessageEmbedding.objects.create(chat_message=msg, embedding=emb)
-
+        msg = ChatMessage.objects.create(user=self.user, role=role, content=content)
+        # Only embed user messages or meaningful assistant responses for future search
+        if role == 'user' or len(content) > 50:
+            emb = self._get_embedding(content)
+            if emb:
+                ChatMessageEmbedding.objects.create(chat_message=msg, embedding=emb)
         return msg
