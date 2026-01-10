@@ -1,36 +1,28 @@
 import os
-import environ
 from pathlib import Path
-
-# Initialize environment variables
-env = environ.Env(
-    DEBUG=(bool, False),
-    ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1']),
-)
+from dotenv import load_dotenv
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Take environment variables from .env file
-environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+# Load environment variables from .env
+load_dotenv(os.path.join(BASE_DIR, '.env'))
+
+# Helpers to parse environment variables
+def _str_to_bool(value):
+    return str(value).lower() in ('1', 'true', 'yes', 'on')
+
+
+def _str_to_list(value, sep=','):
+    return [item.strip() for item in str(value).split(sep) if item.strip()]
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('SECRET_KEY', default='your-default-secret-key-here-replace-me')
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env('DEBUG', default=False)
+DEBUG = _str_to_bool(os.getenv('DEBUG', 'False'))
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'deeptranscribe.in', '.vercel.app']
-
-# CORS settings
-CORS_ALLOW_ALL_ORIGINS = DEBUG
-if not DEBUG:
-    CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # Vite dev server
-    "http://localhost:8000",
-    "https://deeptranscribe.in", # Production domain
-    "https://*.vercel.app", # For Vercel Hosting
-]
+ALLOWED_HOSTS = _str_to_list(os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1'))
 
 # Application definition
 INSTALLED_APPS = [
@@ -92,19 +84,45 @@ CHANNEL_LAYERS = {
 }
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'postgres',
-        'USER': 'postgres.thqngrnaxtqrstrewabn',
-        'PASSWORD': 'E2cw9KOQcgMNksT7',
-        'HOST': 'aws-1-ap-south-1.pooler.supabase.com',
-        'PORT': '6543',
-        'OPTIONS': {
-            'sslmode': 'require',
+_db_url = os.getenv('DATABASE_URL', '')
+if _db_url:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(_db_url)
+    if parsed.scheme.startswith('postgres') or parsed.scheme.startswith('postgresql'):
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql_psycopg2',
+                'NAME': parsed.path[1:],
+                'USER': parsed.username,
+                'PASSWORD': parsed.password,
+                'HOST': parsed.hostname,
+                'PORT': parsed.port,
+            }
+        }
+    elif parsed.scheme.startswith('sqlite'):
+        _db_path = parsed.path[1:] if parsed.path and parsed.path != '/' else os.path.join(BASE_DIR, 'db.sqlite3')
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': os.path.join(BASE_DIR, _db_path),
+            }
+        }
+    else:
+        # Fallback to sqlite
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+            }
+        }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
         }
     }
-}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -156,15 +174,30 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10,
 }
 
+# CORS settings
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+if not DEBUG:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:8000",
+        "https://deep-transcribe.vercel.app",
+    ]
+
 # Deepgram API key
-DEEPGRAM_API_KEY = env('DEEPGRAM_API_KEY')
+DEEPGRAM_API_KEY = os.getenv('DEEPGRAM_API_KEY')
 
 # OpenAI API key
-# OPENAI_API_KEY = env('OPENAI_API_KEY')
-# Gemini API key
-GEMINI_API_KEY = env('GEMINI_API_KEY')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+# Pinecone settings
+PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
+PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT')
+PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME')
 
 # Authentication settings
 LOGIN_URL = '/users/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+
+OPENAI_MODEL = "gpt-4"  # or "gpt-3.5-turbo" for a more economical option
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
