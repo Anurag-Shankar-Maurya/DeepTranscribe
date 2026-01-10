@@ -4,19 +4,43 @@
 {% block title %}Delete Transcript{% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <div class="max-w-3xl mx-auto bg-white rounded-lg shadow-md p-6">
-        <h1 class="text-2xl font-bold text-gray-900 mb-4">Delete Transcript</h1>
-        <p class="mb-6">Are you sure you want to delete the transcript titled "<strong>{{ transcript.title }}</strong>"?</p>
-        <form method="post" action="{% url 'core:transcript_delete' transcript.id %}">
-            {% csrf_token %}
-            <button type="submit" class="px-4 py-2 bg-error-600 text-white rounded-md hover:bg-error-700 focus:outline-none focus:ring-2 focus:ring-error-500 focus:ring-offset-2 transition-colors">
-                Confirm Delete
-            </button>
-            <a href="{% url 'core:transcript_detail' transcript.id %}" class="ml-4 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
-                Cancel
-            </a>
-        </form>
+<div class="min-h-[calc(100vh-4rem)] flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gray-50">
+    <div class="sm:mx-auto sm:w-full sm:max-w-md">
+        <div class="bg-white py-10 px-6 shadow-xl sm:rounded-2xl sm:px-10 border border-gray-100 text-center">
+            
+            <!-- Warning Icon -->
+            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-error-50 mb-6 animate-pulse">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-error-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </div>
+
+            <!-- Heading -->
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Delete Transcript?</h2>
+            
+            <!-- Description -->
+            <p class="text-gray-500 mb-8">
+                Are you sure you want to permanently delete <br>
+                <span class="font-semibold text-gray-900">"{{ transcript.title }}"</span>?
+                <span class="block mt-2 text-xs text-error-600 font-medium">This action cannot be undone.</span>
+            </p>
+
+            <!-- Actions -->
+            <form method="post" action="{% url 'core:transcript_delete' transcript.id %}" class="grid grid-cols-2 gap-4">
+                {% csrf_token %}
+                
+                <a href="{% url 'core:transcript_detail' transcript.id %}" 
+                   class="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
+                    Cancel
+                </a>
+
+                <button type="submit" 
+                        class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-error-600 hover:bg-error-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-error-500 transition-colors">
+                    Yes, Delete
+                </button>
+            </form>
+            
+        </div>
     </div>
 </div>
 {% endblock %}
