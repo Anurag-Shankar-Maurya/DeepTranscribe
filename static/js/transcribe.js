@@ -269,13 +269,35 @@ class TranscriptionManager {
   }
 
   updateButtonState() {
-    const radioStart = document.getElementById('radio-start');
-    const radioStop = document.getElementById('radio-stop');
+    const recordPart = document.getElementById('record-part');
+    const stopPart = document.getElementById('stop-part');
+    const statusDot = document.getElementById('status-indicator');
+    const badge = document.getElementById('recording-badge');
 
     if (this.isRecording) {
-      if (radioStart) radioStart.checked = true;
+      if (recordPart) {
+        recordPart.className = 'flex-1 flex items-center justify-center py-2.5 text-sm font-bold text-gray-500 rounded-lg transition-all';
+      }
+      if (stopPart) {
+        stopPart.className = 'flex-1 flex items-center justify-center py-2.5 text-sm font-bold bg-white text-red-600 rounded-lg shadow-sm transition-all';
+      }
+      if (statusDot) {
+        statusDot.classList.remove('bg-gray-400');
+        statusDot.classList.add('bg-red-500', 'animate-pulse');
+      }
+      if (badge) badge.classList.remove('hidden');
     } else {
-      if (radioStop) radioStop.checked = true;
+      if (recordPart) {
+        recordPart.className = 'flex-1 flex items-center justify-center py-2.5 text-sm font-bold bg-indigo-600 text-white rounded-lg shadow-md transition-all';
+      }
+      if (stopPart) {
+        stopPart.className = 'flex-1 flex items-center justify-center py-2.5 text-sm font-bold text-gray-500 rounded-lg transition-all';
+      }
+      if (statusDot) {
+        statusDot.classList.remove('bg-red-500', 'animate-pulse');
+        statusDot.classList.add('bg-gray-400');
+      }
+      if (badge) badge.classList.add('hidden');
     }
     
     // Maintain hidden button states for any legacy listeners
@@ -434,17 +456,17 @@ document.addEventListener('DOMContentLoaded', () => {
     transcriptionManager.stopRecording();
   });
 
-  // Handle radio toggle
-  const radioToggles = document.getElementsByName('recording-toggle');
-  radioToggles.forEach(radio => {
-    radio.addEventListener('change', (e) => {
-        if (e.target.value === 'start') {
-            transcriptionManager.startRecording();
-        } else {
-            transcriptionManager.stopRecording();
-        }
+  // Handle recording toggle
+  const toggleBtn = document.getElementById('recording-toggle');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      if (transcriptionManager.isRecording) {
+        transcriptionManager.stopRecording();
+      } else {
+        transcriptionManager.startRecording();
+      }
     });
-  });
+  }
   
   // Fetch available models and languages
   fetch('/api/settings/')
