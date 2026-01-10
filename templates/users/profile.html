@@ -57,35 +57,6 @@
                 </form>
             </div>
         </div>
-        
-        <div class="mt-6 bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">Deepgram API Key</h2>
-            <p class="text-gray-600 mb-4">
-                To use the transcription service, ensure your Deepgram API key is set in the environment variables.
-            </p>
-            
-            {% if api_key_prefix %}
-                <div class="flex items-center p-3 bg-success-100 text-success-800 rounded-md">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                    <p>API key is configured ({{ api_key_prefix }})</p>
-                </div>
-            {% else %}
-                <div class="flex items-center p-3 bg-error-100 text-error-800 rounded-md">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <p>API key is not configured</p>
-                </div>
-            {% endif %}
-            
-            <div class="mt-4">
-                <p class="text-gray-600">
-                    Need a Deepgram API key? <a href="https://console.deepgram.com/signup" target="_blank" class="text-primary-600 hover:text-primary-800 transition-colors">Sign up for free</a>
-                </p>
-            </div>
-        </div>
     </div>
 </div>
 {% endblock %}
