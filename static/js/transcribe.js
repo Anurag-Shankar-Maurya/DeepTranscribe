@@ -297,42 +297,51 @@ class TranscriptionManager {
 
   displayTranscriptSegment(data) {
     const container = document.getElementById('transcript-container');
-
-    // Check if there's already a segment for this speaker
+    
+    // Create new speaker div (message bubble)
     const speakerId = data.speaker !== null ? data.speaker : 'unknown';
-    const speakerSelector = `[data-speaker="${speakerId}"]`;
-    let speakerDiv = container.querySelector(speakerSelector);
+    
+    // Create wrapper for alignment
+    const messageWrapper = document.createElement('div');
+    messageWrapper.className = 'flex flex-col mb-4 ' + (data.is_user ? 'items-end' : 'items-start');
+    
+    const bubble = document.createElement('div');
+    // Base styles for bubble
+    bubble.className = 'max-w-[85%] rounded-2xl p-4 shadow-sm relative';
+    
+    // Assign color based on speaker ID (or specific style for user if applicable)
+    // For now, using the randomized colors for speakers
+    const colorIndex = data.speaker !== null ? (data.speaker % this.speakerColors.length) : 0;
+    const speakerColor = this.speakerColors[colorIndex];
+    
+    // Style the bubble
+    // We'll use a light background with a colored border/accent
+    bubble.style.backgroundColor = 'white';
+    bubble.style.borderLeft = `4px solid ${speakerColor}`;
+    bubble.style.borderTopLeftRadius = '4px'; // Distinctive edge
+    
+    // Add speaker label
+    const speakerLabel = document.createElement('div');
+    speakerLabel.className = 'text-xs font-bold mb-1 uppercase tracking-wider opacity-75';
+    speakerLabel.textContent = data.speaker !== null ? `Speaker ${data.speaker}` : 'Unidentified Speaker';
+    speakerLabel.style.color = speakerColor;
+    bubble.appendChild(speakerLabel);
 
-    if (!speakerDiv) {
-      // Create new speaker div
-      speakerDiv = document.createElement('div');
-      speakerDiv.className = 'mb-4 p-4 rounded-lg';
-      speakerDiv.dataset.speaker = speakerId;
-
-      // Assign color based on speaker ID
-      const colorIndex = data.speaker !== null ? (data.speaker % this.speakerColors.length) : 0;
-      const speakerColor = this.speakerColors[colorIndex];
-      speakerDiv.style.backgroundColor = `${speakerColor}15`; // 15% opacity
-      speakerDiv.style.borderLeft = `4px solid ${speakerColor}`;
-
-      // Add speaker label
-      const speakerLabel = document.createElement('div');
-      speakerLabel.className = 'font-semibold text-sm mb-1';
-      speakerLabel.textContent = data.speaker !== null ? `Speaker ${data.speaker}` : 'Unidentified Speaker';
-      speakerLabel.style.color = speakerColor;
-      speakerDiv.appendChild(speakerLabel);
-
-      // Add text container
-      const textContainer = document.createElement('div');
-      textContainer.className = 'text-content';
-      speakerDiv.appendChild(textContainer);
-
-      container.appendChild(speakerDiv);
-    }
-
-    // Update or add text
-    const textContent = speakerDiv.querySelector('.text-content');
+    // Add text content
+    const textContent = document.createElement('div');
+    textContent.className = 'text-gray-800 leading-relaxed text-base';
     textContent.textContent = data.text;
+    bubble.appendChild(textContent);
+    
+    // Add timestamp if available (or current time)
+    const timeLabel = document.createElement('div');
+    timeLabel.className = 'text-xs text-gray-400 mt-2 text-right';
+    const now = new Date();
+    timeLabel.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    bubble.appendChild(timeLabel);
+
+    messageWrapper.appendChild(bubble);
+    container.appendChild(messageWrapper);
 
     // Scroll to bottom
     container.scrollTop = container.scrollHeight;

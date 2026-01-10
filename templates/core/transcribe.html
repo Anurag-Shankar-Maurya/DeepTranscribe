@@ -5,97 +5,210 @@
 
 {% block extra_head %}
 <script src="{% static 'js/transcribe.js' %}"></script>
+<style>
+    /* Custom Scrollbar for the chat area */
+    #transcript-container::-webkit-scrollbar {
+        width: 6px;
+    }
+    #transcript-container::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    #transcript-container::-webkit-scrollbar-thumb {
+        background-color: #cbd5e1;
+        border-radius: 20px;
+    }
+    #transcript-container::-webkit-scrollbar-thumb:hover {
+        background-color: #94a3b8;
+    }
+    
+    /* Animation for settings toggle */
+    details[open] summary ~ * {
+        animation: fadeIn 0.3s ease-in-out;
+    }
+    
+    @keyframes fadeIn {
+        0% { opacity: 0; transform: translateY(-10px); }
+        100% { opacity: 1; transform: translateY(0); }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <div class="max-w-5xl mx-auto">
-        <div class="mb-6">
-            <h1 class="text-3xl font-bold text-gray-900 mb-2">Real-time Transcription</h1>
-            <p class="text-gray-600">Speak into your microphone to start transcribing. The transcription will appear below in real-time.</p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <!-- Sidebar with controls -->
-            <div class="md:col-span-1">
-                <div class="bg-white rounded-lg shadow-md p-6">
-                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Settings</h2>
-
+<!-- Main Container - Full viewport height minus navbar spacing -->
+<div class="h-[calc(100vh-80px)] overflow-hidden bg-gray-50">
+    <div class="container mx-auto px-4 py-4 h-full">
+        <!-- Flex container for Layout -->
+        <div class="flex flex-col md:flex-row gap-6 h-full">
+            
+            <!-- Sidebar / Settings Panel -->
+            <div class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4 md:h-full overflow-y-auto">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
                     <div class="mb-4">
-                        <label for="transcript-title" class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                        <input type="text" id="transcript-title" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Untitled Transcript">
+                        <h1 class="text-2xl font-bold text-gray-900">DeepTranscribe</h1>
+                        <p class="text-xs text-gray-500 mt-1">Real-time AI Transcription</p>
                     </div>
 
-                    <div class="mb-4">
-                        <label for="model" class="block text-sm font-medium text-gray-700 mb-1">Model</label>
-                        <select id="model" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
-                            <!-- Will be populated by JavaScript -->
-                        </select>
+                    <!-- Status Indicator -->
+                    <div class="mb-6 flex items-center space-x-3 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <div id="status-indicator" class="h-3 w-3 rounded-full bg-gray-400 transition-colors duration-300"></div>
+                        <p id="status" class="text-sm font-medium text-gray-700 truncate">Ready to record</p>
                     </div>
 
-                    <div class="mb-4">
-                        <label for="language" class="block text-sm font-medium text-gray-700 mb-1">Language</label>
-                        <select id="language" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
-                            <!-- Will be populated by JavaScript -->
-                        </select>
-                    </div>
-
-                    <div class="space-y-3 mb-6">
-                        <div class="flex items-center">
-                            <input type="checkbox" id="diarize" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" checked>
-                            <label for="diarize" class="ml-2 block text-sm text-gray-700">Speaker Diarization</label>
-                        </div>
-                        <div class="flex items-center">
-                            <input type="checkbox" id="punctuate" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" checked>
-                            <label for="punctuate" class="ml-2 block text-sm text-gray-700">Punctuation</label>
-                        </div>
-                        <div class="flex items-center">
-                            <input type="checkbox" id="numerals" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" checked>
-                            <label for="numerals" class="ml-2 block text-sm text-gray-700">Convert Numerals</label>
-                        </div>
-                        <div class="flex items-center">
-                            <input type="checkbox" id="smart_format" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" checked>
-                            <label for="smart_format" class="ml-2 block text-sm text-gray-700">Smart Formatting</label>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col space-y-3">
-                        <button id="start-recording" class="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors">
-                            Start Recording
+                    <!-- Primary Controls -->
+                    <div class="grid grid-cols-2 gap-3 mb-6">
+                        <button id="start-recording" class="flex items-center justify-center px-4 py-3 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all shadow-lg shadow-indigo-100 transform active:scale-95">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 10 0 2h8a1 1 0 10 0-2h-3v-2.07z" clip-rule="evenodd" />
+                            </svg>
+                            Record
                         </button>
-                        <button id="stop-recording" class="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors" disabled>
-                            Stop Recording
+                        <button id="stop-recording" class="flex items-center justify-center px-4 py-3 bg-white text-red-600 border border-red-100 text-sm font-semibold rounded-xl hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />
+                            </svg>
+                            Stop
                         </button>
                     </div>
 
-                    <div class="mt-4 text-sm text-gray-600">
-                        <p id="status">Ready to record</p>
+                    <!-- Visualizer (Mini) -->
+                    <div class="mb-6 bg-gray-900 rounded-xl overflow-hidden h-16 flex items-center justify-center shadow-inner relative group">
+                        <canvas id="audio-visualizer" class="w-full h-full opacity-80"></canvas>
+                        <div class="absolute inset-0 pointer-events-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]"></div>
                     </div>
+
+                    <!-- Configuration - Collapsible on Mobile, Expanded on Desktop -->
+                    <details class="group md:open" open>
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none text-sm text-gray-600 hover:text-gray-900 transition-colors mb-2">
+                            <span>Configuration</span>
+                            <span class="transition group-open:rotate-180">
+                                <svg fill="none" height="20" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <div class="space-y-4 pt-2">
+                             <div>
+                                <label for="transcript-title" class="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Session Title</label>
+                                <input type="text" id="transcript-title" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="Meeting / Interview...">
+                            </div>
+
+                            <div>
+                                <label for="model" class="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Model</label>
+                                <select id="model" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="language" class="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Language</label>
+                                <select id="language" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
+
+                            <div class="space-y-2 pt-2 border-t border-gray-100">
+                                <label class="flex items-center p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                                    <input type="checkbox" id="diarize" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" checked>
+                                    <span class="ml-2 text-sm text-gray-700">Speaker Diarization</span>
+                                </label>
+                                <label class="flex items-center p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                                    <input type="checkbox" id="punctuate" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" checked>
+                                    <span class="ml-2 text-sm text-gray-700">Punctuation</span>
+                                </label>
+                                <label class="flex items-center p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                                    <input type="checkbox" id="numerals" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" checked>
+                                    <span class="ml-2 text-sm text-gray-700">Convert Numerals</span>
+                                </label>
+                                <label class="flex items-center p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                                    <input type="checkbox" id="smart_format" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" checked>
+                                    <span class="ml-2 text-sm text-gray-700">Smart Formatting</span>
+                                </label>
+                            </div>
+                        </div>
+                    </details>
                 </div>
             </div>
 
-            <!-- Main content area with transcript -->
-            <div class="md:col-span-2">
-                <div class="bg-white rounded-lg shadow-md p-6 h-full flex flex-col">
-                    <div class="mb-4">
-                        <h2 class="text-xl font-semibold text-gray-900">Transcript</h2>
+            <!-- Main Transcript Area -->
+            <div class="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden h-full relative">
+                <!-- Header -->
+                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-sm z-10 sticky top-0">
+                    <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                        </svg>
+                        Live Transcript
+                    </h2>
+                    <div class="text-xs font-mono text-gray-400 flex items-center gap-2">
+                         <span id="recording-badge" class="hidden flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-600 border border-red-100 font-semibold animate-pulse">
+                            <span class="w-1.5 h-1.5 rounded-full bg-red-600"></span>
+                            REC
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Error Toast -->
+                <div id="error-message" class="hidden absolute top-16 left-4 right-4 z-20 p-4 bg-red-50 text-red-700 rounded-xl border border-red-100 flex items-start shadow-md animate-bounce">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 001 1h2a1 1 0 001-1V6a1 1 0 00-1-1H10z" clip-rule="evenodd" />
+                    </svg>
+                    <span class="error-text"></span>
+                </div>
+
+                <!-- Chat/Transcript Area Wrapper -->
+                <div class="relative flex-1 overflow-hidden bg-gray-50/50">
+                    <!-- Actual Container for Messages -->
+                    <div id="transcript-container" class="absolute inset-0 overflow-y-auto p-4 md:p-6 space-y-4 scroll-smooth pb-20">
                     </div>
 
-                    <!-- Audio visualizer -->
-                    <div class="mb-4 bg-gray-900 rounded-lg p-2 h-24 flex items-center justify-center">
-                        <canvas id="audio-visualizer" class="w-full h-20"></canvas>
-                    </div>
-
-                    <!-- Error message -->
-                    <div id="error-message" class="mb-4 p-3 bg-error-100 text-error-800 rounded-md hidden"></div>
-
-                    <!-- Transcript content -->
-                    <div id="transcript-container" class="flex-1 overflow-y-auto bg-gray-50 rounded-lg p-4 min-h-[300px]">
-                        <p class="text-gray-500 text-center mt-10">Start recording to see the transcript appear here.</p>
+                    <!-- Empty State Overlay -->
+                    <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-8 text-center pointer-events-none transition-opacity duration-300">
+                        <div class="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">Ready to Transcribe</h3>
+                        <p class="text-sm text-gray-500 max-w-sm">
+                            Configure your settings in the sidebar and click <span class="font-semibold text-indigo-600">Record</span> to start converting speech to text in real-time.
+                        </p>
                     </div>
                 </div>
             </div>
+            
         </div>
     </div>
 </div>
+
+<!-- Inline script for specific UI interactions -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const startBtn = document.getElementById('start-recording');
+        const stopBtn = document.getElementById('stop-recording');
+        const statusDot = document.getElementById('status-indicator');
+        const badge = document.getElementById('recording-badge');
+        const emptyState = document.getElementById('empty-state');
+        const container = document.getElementById('transcript-container');
+        
+        // Hide empty state when content arrives
+        const observer = new MutationObserver((mutations) => {
+             if (container.children.length > 0) {
+                 emptyState.style.opacity = '0';
+             } else {
+                 emptyState.style.opacity = '1';
+             }
+        });
+        observer.observe(container, { childList: true });
+
+        startBtn.addEventListener('click', () => {
+            statusDot.classList.remove('bg-gray-400');
+            statusDot.classList.add('bg-red-500', 'animate-pulse');
+            badge.classList.remove('hidden');
+        });
+
+        stopBtn.addEventListener('click', () => {
+            statusDot.classList.remove('bg-red-500', 'animate-pulse');
+            statusDot.classList.add('bg-gray-400');
+            badge.classList.add('hidden');
+        });
+    });
+</script>
 {% endblock %}
