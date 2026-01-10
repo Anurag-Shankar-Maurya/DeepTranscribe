@@ -269,16 +269,20 @@ class TranscriptionManager {
   }
 
   updateButtonState() {
-    const startBtn = document.getElementById('start-recording');
-    const stopBtn = document.getElementById('stop-recording');
+    const radioStart = document.getElementById('radio-start');
+    const radioStop = document.getElementById('radio-stop');
 
     if (this.isRecording) {
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
+      if (radioStart) radioStart.checked = true;
     } else {
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
+      if (radioStop) radioStop.checked = true;
     }
+    
+    // Maintain hidden button states for any legacy listeners
+    const startBtn = document.getElementById('start-recording');
+    const stopBtn = document.getElementById('stop-recording');
+    if (startBtn) startBtn.disabled = this.isRecording;
+    if (stopBtn) stopBtn.disabled = !this.isRecording;
   }
 
   updateStatus(message) {
@@ -428,6 +432,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('stop-recording').addEventListener('click', () => {
     transcriptionManager.stopRecording();
+  });
+
+  // Handle radio toggle
+  const radioToggles = document.getElementsByName('recording-toggle');
+  radioToggles.forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        if (e.target.value === 'start') {
+            transcriptionManager.startRecording();
+        } else {
+            transcriptionManager.stopRecording();
+        }
+    });
   });
   
   // Fetch available models and languages
