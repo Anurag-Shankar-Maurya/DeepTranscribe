@@ -3,270 +3,347 @@
 
 {% block title %}Edit Transcript{% endblock %}
 
-{% block content %}
-<div class="container mx-auto px-4 py-8">
-    <div class="max-w-5xl mx-auto">
-        <div class="mb-6">
-            <h1 class="text-3xl font-bold text-gray-900 mb-2">Edit Transcript: {{ transcript.title }}</h1>
-            <p class="text-gray-600">Modify the details, settings, and segments for this transcript.</p>
-        </div>
-
-        <form method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-
-            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-4">Transcript Details</h2>
-                <div class="form-field">
-                    {{ transcript_form.title.label_tag }}
-                    {{ transcript_form.title }}
-                    {% if transcript_form.title.errors %}
-                        <ul class="errorlist">
-                            {% for error in transcript_form.title.errors %}
-                                <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-4">Transcript Settings</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="form-field">
-                        {{ settings_form.model.label_tag }}
-                        {{ settings_form.model }}
-                        {% if settings_form.model.errors %}
-                            <ul class="errorlist">
-                                {% for error in settings_form.model.errors %}
-                                    <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                                {% endfor %}
-                            </ul>
-                        {% endif %}
-                    </div>
-                    <div class="form-field">
-                        {{ settings_form.language.label_tag }}
-                        {{ settings_form.language }}
-                        {% if settings_form.language.errors %}
-                            <ul class="errorlist">
-                                {% for error in settings_form.language.errors %}
-                                    <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                                {% endfor %}
-                            </ul>
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                    <div class="flex items-center">
-                        {{ settings_form.diarize }}
-                        {{ settings_form.diarize.label_tag }}
-                        {% if settings_form.diarize.errors %}
-                            <ul class="errorlist">
-                                {% for error in settings_form.diarize.errors %}
-                                    <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                                {% endfor %}
-                            </ul>
-                        {% endif %}
-                    </div>
-                    <div class="flex items-center">
-                        {{ settings_form.punctuate }}
-                        {{ settings_form.punctuate.label_tag }}
-                        {% if settings_form.punctuate.errors %}
-                            <ul class="errorlist">
-                                {% for error in settings_form.punctuate.errors %}
-                                    <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                                {% endfor %}
-                            </ul>
-                        {% endif %}
-                    </div>
-                    <div class="flex items-center">
-                        {{ settings_form.numerals }}
-                        {{ settings_form.numerals.label_tag }}
-                        {% if settings_form.numerals.errors %}
-                            <ul class="errorlist">
-                                {% for error in settings_form.numerals.errors %}
-                                    <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                                {% endfor %}
-                            </ul>
-                        {% endif %}
-                    </div>
-                </div>
-                 <div class="form-field mt-4">
-                    {{ settings_form.smart_format.label_tag }}
-                    {{ settings_form.smart_format }}
-                    {% if settings_form.smart_format.errors %}
-                        <ul class="errorlist">
-                            {% for error in settings_form.smart_format.errors %}
-                                <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-4">Transcript Segments</h2>
-                {{ segment_formset.management_form }}
-                {% for segment_form in segment_formset %}
-                    <div class="segment-form border border-gray-200 p-4 mb-4 rounded-md {% if segment_form.DELETE.value %}bg-red-100{% endif %}">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-3">Segment {{ forloop.counter }}</h3>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="form-field md:col-span-2">
-                                {{ segment_form.id }} {# Hidden input for segment ID #}
-                                {{ segment_form.text.label_tag }}
-                                {{ segment_form.text }}
-                                {% if segment_form.text.errors %}
-                                    <ul class="errorlist">
-                                        {% for error in segment_form.text.errors %}
-                                            <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                {% endif %}
-                            </div>
-                            <div class="form-field">
-                                {{ segment_form.speaker.label_tag }}
-                                {{ segment_form.speaker }}
-                                {% if segment_form.speaker.errors %}
-                                    <ul class="errorlist">
-                                        {% for error in segment_form.speaker.errors %}
-                                            <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                {% endif %}
-                            </div>
-                            <div class="form-field">
-                                {{ segment_form.start_time.label_tag }}
-                                {{ segment_form.start_time }}
-                                {% if segment_form.start_time.errors %}
-                                    <ul class="errorlist">
-                                        {% for error in segment_form.start_time.errors %}
-                                            <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                {% endif %}
-                            </div>
-                            <div class="form-field">
-                                {{ segment_form.end_time.label_tag }}
-                                {{ segment_form.end_time }}
-                                {% if segment_form.end_time.errors %}
-                                    <ul class="errorlist">
-                                        {% for error in segment_form.end_time.errors %}
-                                            <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                {% endif %}
-                            </div>
-                            <div class="form-field">
-                                {{ segment_form.confidence.label_tag }}
-                                {{ segment_form.confidence }}
-                                {% if segment_form.confidence.errors %}
-                                    <ul class="errorlist">
-                                        {% for error in segment_form.confidence.errors %}
-                                            <li class="text-red-600 text-sm mt-1">{{ error }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        {% if segment_form.can_delete %}
-                            <div class="form-field mt-3">
-                                {{ segment_form.DELETE }}
-                                {{ segment_form.DELETE.label_tag }}
-                                <span class="delete-form text-red-500 cursor-pointer font-semibold ml-2" onclick="this.parentNode.querySelector('input[type=checkbox]').click()">Mark for deletion</span>
-                            </div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            </div>
-
-            <div class="form-actions text-right mt-6">
-                <button type="submit" class="px-6 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors">
-                    Save Changes
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
+{% block extra_head %}
 <style>
-    /* Styles for fixed save button */
-    .form-actions {
-        position: fixed;
-        bottom: 10%; /* Adjust as needed */
-        /* now horizontal center */
-        left: 50%;
-        transform: translateX(-50%);
-        text-align: center;
-        z-index: 1000; /* Ensure it's above other content */
-        background-color: rgba(255, 255, 255, 0.253); /* Background to prevent content showing through */
-        backdrop-filter: blur(2px); /* Blur effect */
-        padding: 10px 20px;
-        border-radius: 8px;
-        box-shadow: 0 -2px 10px rgba(0,0,0,0.1); /* Subtle shadow */
+    /* 
+     * Global Input Styling for Django Forms 
+     */
+    .form-group input[type="text"],
+    .form-group input[type="number"],
+    .form-group select,
+    .form-group textarea {
+        display: block;
+        width: 100%;
+        border-radius: 0.5rem;
+        border-width: 1px;
+        border-color: #d1d5db;
+        padding: 0.625rem 0.875rem;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        background-color: #ffffff;
+        transition: all 0.2s;
     }
 
-    /* Add padding to the bottom of the main content to prevent it from being hidden by the fixed button */
-    /* This value should be roughly the height of the fixed button area */
-    .container > .max-w-5xl > .mb-6 + div { /* Target the first form section after the header */
-        padding-bottom: 100px; /* Adjust based on button height */
+    .form-group input[type="text"]:focus,
+    .form-group input[type="number"]:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+        border-color: #0284c7; /* primary-600 */
+        box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.1);
     }
 
-    /* Ensure textareas auto-resize */
-    textarea[id$="-text"] {
-        overflow: hidden; /* Hide scrollbars while resizing */
-        resize: none; /* Disable manual resizing */
-        min-height: 60px; /* Minimum height */
+    /* Standard Label Style */
+    .form-group label {
+        display: block;
+        font-size: 0.875rem; /* text-sm */
+        font-weight: 500;
+        color: #374151; /* gray-700 */
+        margin-bottom: 0.375rem;
+    }
+
+    /* Micro Label Style (for the segment headers) */
+    .micro-label {
+        display: block;
+        font-size: 0.65rem; /* Tiny text */
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 700;
+        color: #6b7280; /* gray-500 */
+        margin-bottom: 0.25rem;
+    }
+
+    /* Checkbox Wrapper */
+    .checkbox-wrapper {
+        display: flex;
+        align-items: center;
+        background-color: #f9fafb;
+        border: 1px solid #e5e7eb;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        transition: background-color 0.2s;
+    }
+    .checkbox-wrapper:hover {
+        background-color: #f3f4f6;
+    }
+    .checkbox-wrapper input[type="checkbox"] {
+        height: 1rem;
+        width: 1rem;
+        color: #0284c7;
+        border-radius: 0.25rem;
+        border-color: #d1d5db;
+        margin-right: 0.75rem;
+    }
+
+    /* Sticky Bottom Bar */
+    .sticky-action-bar {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-top: 1px solid #e5e7eb;
+        box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
     }
 </style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 pb-32">
+    
+    <!-- Header -->
+    <div class="bg-white border-b border-gray-200 pt-8 pb-8">
+        <div class="container mx-auto px-4 max-w-5xl">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Edit Transcript</h1>
+                    <p class="mt-2 text-gray-600">Update metadata, configure settings, and correct transcription errors.</p>
+                </div>
+                <a href="{% url 'core:transcript_detail' transcript.id %}" class="text-sm text-gray-500 hover:text-primary-600 flex items-center transition-colors">
+                    <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                    Cancel & Return
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" id="edit-form">
+        {% csrf_token %}
+        
+        <div class="container mx-auto px-4 max-w-5xl mt-8 space-y-8">
+
+            <!-- Section 1: Main Details -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                    <h2 class="text-lg font-semibold text-gray-900">General Information</h2>
+                </div>
+                <div class="p-6">
+                    <div class="form-group">
+                        <label for="{{ transcript_form.title.id_for_label }}">Transcript Title</label>
+                        {{ transcript_form.title }}
+                        {% if transcript_form.title.errors %}
+                            <p class="mt-1 text-sm text-error-600">{{ transcript_form.title.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Settings -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                    <h2 class="text-lg font-semibold text-gray-900">AI Configuration</h2>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="form-group">
+                            <label for="{{ settings_form.model.id_for_label }}">AI Model</label>
+                            {{ settings_form.model }}
+                        </div>
+                        <div class="form-group">
+                            <label for="{{ settings_form.language.id_for_label }}">Language</label>
+                            {{ settings_form.language }}
+                        </div>
+                    </div>
+
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Processing Options</label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="checkbox-wrapper">
+                            {{ settings_form.diarize }}
+                            <label for="{{ settings_form.diarize.id_for_label }}" class="!m-0 cursor-pointer">Diarization</label>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            {{ settings_form.punctuate }}
+                            <label for="{{ settings_form.punctuate.id_for_label }}" class="!m-0 cursor-pointer">Punctuation</label>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            {{ settings_form.numerals }}
+                            <label for="{{ settings_form.numerals.id_for_label }}" class="!m-0 cursor-pointer">Numerals</label>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            {{ settings_form.smart_format }}
+                            <label for="{{ settings_form.smart_format.id_for_label }}" class="!m-0 cursor-pointer">Smart Format</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 3: Segments -->
+            <div class="space-y-4">
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="text-xl font-bold text-gray-900">Transcript Segments</h2>
+                    <span class="text-sm text-gray-500 bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm">
+                        {{ segment_formset.total_form_count }} segments
+                    </span>
+                </div>
+
+                {{ segment_formset.management_form }}
+                
+                <div class="space-y-4" id="segment-container">
+                    {% for segment_form in segment_formset %}
+                        <div class="segment-card bg-white rounded-xl shadow-sm border border-gray-200 transition-colors duration-300">
+                            {{ segment_form.id }}
+                            
+                            <!-- Card Header -->
+                            <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                                <div class="flex flex-col sm:flex-row sm:items-end gap-4 justify-between">
+                                    
+                                    <!-- Inputs Group -->
+                                    <div class="flex items-center gap-4 flex-1">
+                                        <!-- Index Number -->
+                                        <div class="flex-shrink-0 self-center pt-3">
+                                            <span class="text-xs font-mono font-bold text-gray-400 bg-gray-200 px-2 py-1 rounded">#{{ forloop.counter }}</span>
+                                        </div>
+
+                                        <!-- Speaker Input -->
+                                        <div class="form-group w-full sm:w-48">
+                                            <label for="{{ segment_form.speaker.id_for_label }}" class="micro-label">Speaker</label>
+                                            {{ segment_form.speaker }}
+                                        </div>
+
+                                        <!-- Start Time Input -->
+                                        <div class="form-group w-24 sm:w-32">
+                                            <label for="{{ segment_form.start_time.id_for_label }}" class="micro-label">Start (s)</label>
+                                            {{ segment_form.start_time }}
+                                        </div>
+
+                                        <!-- End Time Input -->
+                                        <div class="form-group w-24 sm:w-32">
+                                            <label for="{{ segment_form.end_time.id_for_label }}" class="micro-label">End (s)</label>
+                                            {{ segment_form.end_time }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Delete Toggle -->
+                                    {% if segment_form.can_delete %}
+                                        <div class="flex-shrink-0 pt-3">
+                                            <label class="inline-flex items-center cursor-pointer group select-none">
+                                                <div class="relative">
+                                                    {{ segment_form.DELETE }}
+                                                    <div class="w-10 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-error-500 shadow-inner"></div>
+                                                </div>
+                                                <span class="ml-2 text-xs font-bold uppercase tracking-wide text-gray-400 group-hover:text-error-600 transition-colors">Delete</span>
+                                            </label>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Card Body: Text Content -->
+                            <div class="p-6">
+                                <div class="form-group">
+                                    <label for="{{ segment_form.text.id_for_label }}" class="micro-label mb-2">Transcript Text</label>
+                                    {{ segment_form.text }}
+                                </div>
+                                
+                                <div class="mt-3 flex justify-end">
+                                    <div class="text-[10px] uppercase font-bold text-gray-400">
+                                        Confidence: 
+                                        {% if segment_form.instance.confidence %}
+                                            <span class="text-gray-600">{{ segment_form.instance.confidence|floatformat:2 }}</span>
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <!-- Hidden logic fields -->
+                                    <div class="hidden">
+                                        {{ segment_form.confidence }} 
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Sticky Action Bar -->
+        <div class="fixed bottom-0 left-0 right-0 sticky-action-bar z-50">
+            <div class="container mx-auto px-4 max-w-5xl py-4 flex items-center justify-between">
+                <div class="text-sm font-medium">
+                    <span id="unsaved-changes-indicator" class="hidden flex items-center text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-100">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        Unsaved changes
+                    </span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <a href="{% url 'core:transcript_detail' transcript.id %}" class="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 hover:text-gray-900 transition-colors">
+                        Discard
+                    </a>
+                    <button type="submit" class="px-8 py-2.5 rounded-lg bg-primary-600 text-white font-bold hover:bg-primary-700 shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 hover:-translate-y-0.5 transition-all focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </form>
+</div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Style for delete checkboxes
-        const deleteCheckboxes = document.querySelectorAll('input[type="checkbox"][name$="-DELETE"]');
-        deleteCheckboxes.forEach(checkbox => {
-            const segmentFormDiv = checkbox.closest('.segment-form');
-            if (checkbox.checked) {
-                segmentFormDiv.classList.add('bg-red-100'); // Apply red background if marked for deletion
-            }
-            checkbox.addEventListener('change', function() {
-                if (this.checked) {
-                    segmentFormDiv.classList.add('bg-red-100');
-                } else {
-                    segmentFormDiv.classList.remove('bg-red-100');
-                }
-            });
-        });
-
-        // Ensure labels are correctly associated with inputs
-        document.querySelectorAll('.form-field label').forEach(label => {
-            const inputId = label.getAttribute('for');
-            if (inputId) {
-                const inputElement = document.getElementById(inputId);
-                if (inputElement) {
-                    label.style.display = 'block'; // Ensure label is block for proper spacing
-                }
-            }
-        });
-
-        // Basic styling for form fields if not already handled by Tailwind
-        document.querySelectorAll('.form-field input[type="text"], .form-field input[type="number"], .form-field textarea, .form-field select').forEach(input => {
-            input.classList.add('w-full', 'px-3', 'py-2', 'border', 'border-gray-300', 'rounded-md', 'focus:outline-none', 'focus:ring-2', 'focus:ring-primary-500');
-            if (input.type === 'checkbox') {
-                input.classList.add('h-4', 'w-4', 'text-primary-600', 'focus:ring-primary-500', 'border-gray-300', 'rounded');
-            }
-        });
+        // 1. Auto-resize Textareas
+        const textareas = document.querySelectorAll('textarea');
         
-        // Auto-resizing textareas
-        const textareas = document.querySelectorAll('textarea[id$="-text"]');
-        textareas.forEach(textarea => {
-            const adjustHeight = () => {
-                textarea.style.height = 'auto'; // Reset height to recalculate scrollHeight
-                textarea.style.height = textarea.scrollHeight + 'px';
-            };
+        const resize = (el) => {
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        };
+
+        textareas.forEach(el => {
+            resize(el);
+            el.addEventListener('input', () => resize(el));
+            // Ensure visual consistency
+            el.classList.add('resize-none', 'overflow-hidden');
+            el.style.minHeight = '80px';
+        });
+
+        // 2. Handle Delete Visuals
+        const deleteCheckboxes = document.querySelectorAll('input[type="checkbox"][name$="-DELETE"]');
+        
+        const updateCardStyle = (checkbox) => {
+            const card = checkbox.closest('.segment-card');
+            if (card) {
+                if (checkbox.checked) {
+                    card.classList.add('bg-error-50', 'border-error-200');
+                    card.classList.remove('bg-white', 'border-gray-200');
+                    
+                    // Dim the inputs to indicate deletion
+                    const inputs = card.querySelectorAll('input:not([type="checkbox"]), textarea');
+                    inputs.forEach(input => {
+                        input.disabled = true;
+                        input.classList.add('opacity-50', 'bg-gray-50');
+                    });
+                } else {
+                    card.classList.remove('bg-error-50', 'border-error-200');
+                    card.classList.add('bg-white', 'border-gray-200');
+                    
+                    // Re-enable inputs
+                    const inputs = card.querySelectorAll('input:not([type="checkbox"]), textarea');
+                    inputs.forEach(input => {
+                        input.disabled = false;
+                        input.classList.remove('opacity-50', 'bg-gray-50');
+                    });
+                }
+            }
+        };
+
+        deleteCheckboxes.forEach(cb => {
+            cb.classList.add('sr-only', 'peer'); // Hide standard checkbox
             
-            textarea.addEventListener('input', adjustHeight);
-            adjustHeight(); // Initial adjustment on load
+            // Check initial state (e.g., if page reloads with error)
+            updateCardStyle(cb);
+            
+            // Listen for changes
+            cb.addEventListener('change', () => updateCardStyle(cb));
+        });
+
+        // 3. Unsaved Changes Indicator
+        const form = document.getElementById('edit-form');
+        const indicator = document.getElementById('unsaved-changes-indicator');
+        
+        form.addEventListener('input', () => {
+            indicator.classList.remove('hidden');
         });
     });
 </script>
