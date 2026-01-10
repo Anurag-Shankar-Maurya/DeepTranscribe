@@ -36,7 +36,6 @@ protobuf==5.29.5
 psycopg2-binary==2.9.10
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
-PyAudio==0.2.14
 pycparser==2.23
 pydantic==2.11.9
 pydantic_core==2.33.2

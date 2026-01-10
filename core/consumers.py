@@ -4,7 +4,6 @@ import logging
 import os
 import threading
 import websocket
-import pyaudio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.conf import settings as django_settings
@@ -20,7 +19,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
     SAMPLE_RATE = 16000
     CHANNELS = 1
     CHUNK_SIZE = 4096
-    FORMAT = pyaudio.paInt16
     AUDIO_ENCODING = "linear16"
 
     def __init__(self, *args, **kwargs):
@@ -34,9 +32,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
         self.current_speaker = None
         self.streaming_active = False
         self.loop = None  # Will hold reference to the consumer's event loop
-        self.audio_thread = None
-        self.pyaudio_instance = None
-        self.audio_stream = None
 
     async def connect(self):
         self.user = self.scope["user"]
@@ -55,9 +50,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
             self.ws.close()
             self.ws = None
 
-        # Make sure to stop audio stream
-        self.stop_audio_stream()
-
         if self.transcript_id:
             await self.update_transcript_status(self.transcript_id, True)
         logger.info(f"WebSocket connection closed for user {self.user.username}")
@@ -74,6 +66,14 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
 
             elif command == 'stop_transcription':
                 await self.stop_transcription()
+
+        elif bytes_data:
+            # Forward audio data to Deepgram
+            if self.ws and self.ws.sock and self.ws.sock.connected and self.streaming_active:
+                try:
+                    self.ws.send(bytes_data, opcode=websocket.ABNF.OPCODE_BINARY)
+                except Exception as e:
+                    logger.error(f"Error sending audio data to Deepgram: {e}")
 
     async def start_transcription(self, title, settings_data):
         self.transcript_id = await self.create_transcript(title, settings_data)
@@ -109,8 +109,7 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
         def on_open(ws):
             logger.info("Deepgram WebSocket connection opened")
             self.ws_ready = True
-            # Start audio streaming when WebSocket is ready
-            self.start_audio_stream(ws)
+            # Audio will be sent from client via WebSocket
 
         def on_message(ws, message):
             try:
@@ -142,7 +141,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
             self.streaming_active = False
             self.ws = None
             self.ws_ready = False
-            self.stop_audio_stream()
             asyncio.run_coroutine_threadsafe(
                 self.send(text_data=json.dumps({
                     'status': 'transcription_stopped',
@@ -184,70 +182,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
             'transcript_id': self.transcript_id
         }))
 
-    def start_audio_stream(self, ws):
-        """Start the audio streaming in a separate thread."""
-        if self.audio_thread and self.audio_thread.is_alive():
-            # A thread is already running
-            return
-
-        self.audio_thread = threading.Thread(
-            target=self.stream_audio,
-            args=(ws,),
-            daemon=True
-        )
-        self.audio_thread.start()
-        logger.info("Audio streaming thread started")
-
-    def stream_audio(self, ws):
-        """Captures and streams audio to Deepgram."""
-        try:
-            self.pyaudio_instance = pyaudio.PyAudio()
-            self.audio_stream = self.pyaudio_instance.open(
-                format=self.FORMAT,
-                channels=self.CHANNELS,
-                rate=self.SAMPLE_RATE,
-                input=True,
-                frames_per_buffer=self.CHUNK_SIZE // 2
-            )
-
-            logger.info("Microphone streaming started...")
-
-            while self.streaming_active and ws and ws.sock and ws.sock.connected:
-                try:
-                    data = self.audio_stream.read(self.CHUNK_SIZE // 2, exception_on_overflow=False)
-                    if self.streaming_active and ws and ws.sock and ws.sock.connected:
-                        ws.send(data, opcode=websocket.ABNF.OPCODE_BINARY)
-                except IOError as e:
-                    if e.errno == pyaudio.paInputOverflowed:
-                        continue
-                    logger.error(f"IO Error in audio streaming: {e}")
-                    break
-                except Exception as e:
-                    logger.error(f"Error in audio streaming: {e}")
-                    break
-
-        except Exception as e:
-            logger.error(f"Audio streaming error: {e}")
-        finally:
-            self.stop_audio_stream()
-
-    def stop_audio_stream(self):
-        """Stop and clean up the audio stream."""
-        if self.audio_stream:
-            try:
-                self.audio_stream.stop_stream()
-                self.audio_stream.close()
-                self.audio_stream = None
-            except Exception as e:
-                logger.error(f"Error stopping audio stream: {e}")
-
-        if self.pyaudio_instance:
-            try:
-                self.pyaudio_instance.terminate()
-                self.pyaudio_instance = None
-            except Exception as e:
-                logger.error(f"Error terminating PyAudio: {e}")
-
     async def stop_transcription(self):
         if self.streaming_active:
             self.streaming_active = False
@@ -255,9 +189,6 @@ class TranscribeConsumer(AsyncWebsocketConsumer):
                 self.ws.close()
                 self.ws = None
                 self.ws_ready = False
-
-            # Stop audio stream
-            self.stop_audio_stream()
 
             if self.transcript_id:
                 await self.update_transcript_status(self.transcript_id, True)
