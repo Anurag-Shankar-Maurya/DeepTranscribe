@@ -369,7 +369,7 @@ class ChatbotService:
         recent_list = ", ".join([f"'{t.title}' ({t.created_at.date()})" for t in recent])
 
         return (
-            f"You are an intelligent assistant for user {self.user.username}. "
+            f"You are an intelligent assistant for user {self.user}. "
             f"Today is {datetime.now().strftime('%Y-%m-%d')}. "
             f"User's Recent Transcripts available in DB: [{recent_list}]. "
             "Use the provided 'Retrieved Transcripts' to answer factual questions about files. "
