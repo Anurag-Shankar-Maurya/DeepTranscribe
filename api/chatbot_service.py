@@ -85,28 +85,33 @@ class ChatbotService:
             transcripts = Transcript.objects.filter(user=self.user).order_by('-created_at')[:20]
             if not transcripts:
                 return "You don't have any transcript sessions yet."
-            
+
             lines = ["Here are your most recent sessions:"]
             for t in transcripts:
                 lines.append(f"• **{t.title}** ({t.created_at.strftime('%b %d, %Y %I:%M %p')})")
             return "\n".join(lines)
 
         # Command: Summary of specific transcript(s)
-        # Regex captures the core name, e.g., "Bipul Conversation" from "Summarize both Bipul Conversation sessions"
+        # Regex captures the intention to summarize
         summary_match = re.search(r'(?:summarize|summary of|summary for) (?:the )?(?:transcript )?["\']?([^"\']+)["\']?', text)
-        
+
         if summary_match and 'last' not in text:
-            raw_query = summary_match.group(1).strip()
-            
-            # cleanup common words that confuse the title lookup
-            clean_query = raw_query.replace('both', '').replace('all', '').replace('sessions', '').strip()
+            # Extract the raw target, e.g., "both sessions with Bipul"
+            raw_target = summary_match.group(1).strip()
+
+            # Clean up common filler words to find the core title keyword
+            # Removes: 'both', 'all', 'sessions', 'with' to extract just "Bipul"
+            clean_query = raw_target.replace('both', '').replace('all', '').replace('sessions', '').replace('with', '').strip()
+
+            if not clean_query:
+                return "Please specify which transcript title you would like me to summarize."
 
             # Find ALL matching transcripts, not just the first one
             transcripts = Transcript.objects.filter(user=self.user, title__icontains=clean_query).order_by('-created_at')
 
             if transcripts.exists():
                 return self._generate_multi_transcript_summary(transcripts)
-            elif not transcripts.exists() and len(clean_query) > 3:
+            else:
                  return f"I couldn't find any transcripts with the title containing '{clean_query}'."
 
         return None
@@ -221,26 +226,27 @@ class ChatbotService:
     def _generate_multi_transcript_summary(self, transcripts) -> str:
         """
         Summarizes a queryset of transcripts.
-        If multiple are found, it generates a combined summary.
+        If multiple are found (e.g. "both Bipul sessions"), it generates a combined output.
         """
         response_parts = []
-
         count = transcripts.count()
+
         response_parts.append(f"Found {count} transcript{'s' if count > 1 else ''} matching your request.\n")
 
         for transcript in transcripts:
+            # Format the header
+            response_parts.append(f"### Summary for: {transcript.title} ({transcript.created_at.strftime('%b %d')})")
+
+            # Get segments
             segments = transcript.segments.all().order_by('start_time')
             full_text = "\n".join([f"{s.speaker}: {s.text}" for s in segments])
-
-            # Header for this specific transcript
-            response_parts.append(f"### Summary for: {transcript.title} ({transcript.created_at.strftime('%b %d')})")
 
             prompt = f"""
             Analyze the following transcript titled "{transcript.title}".
             Provide a concise summary, listing key topics discussed and any action items.
 
             TRANSCRIPT:
-            {full_text[:25000]}
+            {full_text[:20000]} # Limit to avoid context overflow
             """
 
             try:
@@ -250,7 +256,7 @@ class ChatbotService:
                 )
                 response_parts.append(llm_response.text + "\n")
             except Exception as e:
-                logger.error(f"Summary generation failed for {transcript.id}: {e}")
+                logger.error(f"Summary generation failed for transcript {transcript.id}: {e}")
                 response_parts.append("*(Could not generate summary for this specific session due to an error)*\n")
 
         return "\n".join(response_parts)
