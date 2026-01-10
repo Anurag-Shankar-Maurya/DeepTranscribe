@@ -18,7 +18,7 @@ class ChatbotService:
 
         # Use a lightweight model for embeddings, standard for chat
         self.embedding_model = "models/text-embedding-004"
-        self.chat_model_name = "gemini-2.5-flash"
+        self.chat_model_name = "gemini-2.5-flash-lite"
 
         self.retrieval_threshold = 0.45  # Stricter threshold to reduce noise
         self.top_k = 10  # Number of segments to retrieve
@@ -212,7 +212,11 @@ class ChatbotService:
         results = []
         for idx in top_indices:
             if scores[idx] > self.retrieval_threshold:
-                results.append(data[idx])
+                item = data[idx]
+                results.append({
+                    'role': item['chat_message__role'],
+                    'content': item['chat_message__content']
+                })
         return results
 
     def _generate_transcript_summary(self, transcript: Transcript) -> str:
