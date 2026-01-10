@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Transcript, TranscriptSegment, TranscriptSettings
+from .models import Transcript, TranscriptSegment, TranscriptSettings, TranscriptEmbedding
 
 
 class TranscriptSegmentInline(admin.TabularInline):
@@ -32,3 +32,11 @@ class TranscriptSettingsAdmin(admin.ModelAdmin):
     list_display = ('transcript', 'model', 'language', 'diarize')
     list_filter = ('model', 'language', 'diarize')
     search_fields = ('transcript__title',)
+
+
+@admin.register(TranscriptEmbedding)
+class TranscriptEmbeddingAdmin(admin.ModelAdmin):
+    list_display = ('transcript', 'segment', 'created_at')
+    list_filter = ('created_at', 'transcript')
+    search_fields = ('transcript__title', 'segment__text')
+    readonly_fields = ('created_at', 'embedding')

@@ -187,12 +187,12 @@ if not DEBUG:
 DEEPGRAM_API_KEY = os.getenv('DEEPGRAM_API_KEY')
 
 # OpenAI API key
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+# OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Pinecone settings
-PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
-PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT')
-PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME')
+# PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
+# PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT')
+# PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME')
 
 # Authentication settings
 LOGIN_URL = '/users/login/'
