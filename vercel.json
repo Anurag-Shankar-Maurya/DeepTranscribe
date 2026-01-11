@@ -1,13 +1,16 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "transcriber/wsgi.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "15mb" }
+  "functions": {
+    "transcriber/wsgi.py": {
+      "runtime": "@vercel/python",
+      "excludeFiles": ["staticfiles/**", "fonts/**"]
     }
-  ],
+  },
   "routes": [
+    {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
     {
       "src": "/(.*)",
       "dest": "transcriber/wsgi.py"
