@@ -3,7 +3,7 @@
   "functions": {
     "transcriber/wsgi.py": {
       "runtime": "@vercel/python",
-      "excludeFiles": ["staticfiles/**", "fonts/**"]
+      "excludeFiles": "staticfiles/** fonts/**"
     }
   },
   "routes": [
