@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "transcriber/wsgi.py": {
-      "runtime": "@vercel/python",
+      "runtime": "python",
       "excludeFiles": "staticfiles/** fonts/**"
     }
   },
