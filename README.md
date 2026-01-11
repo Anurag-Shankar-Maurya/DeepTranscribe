@@ -10,9 +10,14 @@ DeepTranscribe is a comprehensive Django-based web application that leverages AI
 
 ### Core Functionality
 - **Real-time Transcription**: Advanced speech-to-text with speaker diarization and automatic punctuation
-- **AI-Powered Chatbot**: Context-aware conversational assistant using transcript data and chat history
+- **Advanced AI Chatbot**: Intelligent conversational assistant with context-aware responses, featuring:
+  - **Semantic Search**: Vector-based retrieval of relevant transcript segments using FAISS similarity search
+  - **Conversational Memory**: Maintains chat history and context across multiple interactions
+  - **Multi-turn Conversations**: Remembers previous questions and answers within sessions
+  - **Intelligent Q&A**: Ask specific questions like "What did the CEO say about Q4 projections?" or "Summarize the key decisions made"
+  - **Entity-aware Responses**: Recognizes and leverages named entities, dates, and key terms from transcripts
 - **Transcript Management**: Complete CRUD operations with support for multiple export formats
-- **Analytics & Insights**: Sentiment analysis, entity extraction, speaker activity tracking, and timeline generation
+- **Advanced Analytics & Insights**: Sentiment analysis, entity extraction, speaker activity tracking, and conversation timeline generation
 
 ### Technical Features
 - **User Authentication**: Secure registration, login, and profile management system
@@ -21,8 +26,30 @@ DeepTranscribe is a comprehensive Django-based web application that leverages AI
 - **Multi-format Export**: Export transcripts as JSON, plain text, or PDF
 - **CORS Support**: Ready for frontend integration and cross-origin requests
 
+## 🎯 Innovation: Advanced Vector + SQL Approach
+
+DeepTranscribe pioneers a **hybrid vector-SQL architecture** that combines the semantic search capabilities of vector databases with the reliability and structure of traditional SQL databases. This innovative approach provides:
+
+### 🚀 Revolutionary Features
+- **Hybrid Search Engine**: Seamlessly combines vector similarity search with structured SQL queries for comprehensive information retrieval
+- **Persistent Vector Storage**: Vector embeddings are stored directly in PostgreSQL alongside relational data, eliminating the need for separate vector databases
+- **Memory Consolidation**: Advanced algorithms that consolidate chat history and context across multiple sessions using vector similarity
+- **Intelligent Retrieval**: Context-aware information retrieval that understands semantic meaning and relationships
+- **Scalable Architecture**: Built to handle large transcript datasets while maintaining fast query performance
+
+### 🏗️ Technical Innovation
+Unlike traditional RAG (Retrieval-Augmented Generation) systems that rely on separate vector databases, DeepTranscribe integrates vector operations directly into the SQL workflow, creating a unified data architecture that offers:
+
+- **Unified Data Model**: Single source of truth for both structured data and vector embeddings
+- **ACID Compliance**: Vector operations maintain database transaction integrity
+- **Simplified Deployment**: No need for complex vector database infrastructure
+- **Cost Efficiency**: Reduced infrastructure complexity and operational overhead
+- **Developer Experience**: Familiar SQL-based development patterns for vector operations
+
 ## 📋 Table of Contents
 
+- [Features](#-features)
+- [Innovation: Advanced Vector + SQL Approach](#-innovation-advanced-vector--sql-approach)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage](#usage)
