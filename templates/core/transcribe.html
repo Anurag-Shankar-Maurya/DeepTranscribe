@@ -6,7 +6,7 @@
 {% block extra_head %}
 <script src="{% static 'js/transcribe.js' %}"></script>
 <style>
-    /* Custom Scrollbar for the chat area */
+    /* Custom Scrollbar */
     #transcript-container::-webkit-scrollbar {
         width: 6px;
     }
@@ -21,7 +21,7 @@
         background-color: #94a3b8;
     }
     
-    /* Animation for settings toggle */
+    /* Desktop Settings Animation */
     details[open] summary ~ * {
         animation: fadeIn 0.3s ease-in-out;
     }
@@ -30,18 +30,63 @@
         0% { opacity: 0; transform: translateY(-10px); }
         100% { opacity: 1; transform: translateY(0); }
     }
+
+    /* --- MOBILE SPECIFIC STYLES --- */
+    /* Drawer Animation */
+    #mobile-drawer {
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        will-change: transform;
+    }
+    .drawer-open { transform: translateY(0); }
+    .drawer-closed { transform: translateY(100%); }
+    
+    /* Overlay Fade */
+    #mobile-overlay {
+        transition: opacity 0.3s ease;
+    }
+    
+    /* Recording Pulse for Mobile FAB */
+    @keyframes pulse-red {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .mobile-recording-active {
+        background-color: #ef4444 !important; /* Red-500 */
+        animation: pulse-red 2s infinite;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Main Container - Full viewport height minus navbar spacing -->
-<div class="h-[calc(100vh-80px)] overflow-hidden bg-gray-50">
-    <div class="container mx-auto px-4 py-4 h-full">
+<div class="h-[calc(100vh-64px)] md:h-[calc(100vh-80px)] overflow-hidden bg-gray-50 relative">
+    
+    <!-- ========================================== -->
+    <!-- MOBILE HEADER (Hidden on Desktop)          -->
+    <!-- ========================================== -->
+    <div class="md:hidden absolute top-0 left-0 right-0 h-14 bg-white/90 backdrop-blur-md border-b border-gray-200 px-4 flex justify-between items-center z-20">
+        <div class="flex items-center gap-2">
+            <div id="mobile-status-dot" class="h-2.5 w-2.5 rounded-full bg-gray-400 transition-colors"></div>
+            <span id="mobile-status-text" class="text-sm font-semibold text-gray-700">Ready</span>
+        </div>
+        <button id="mobile-settings-btn" class="p-2 text-gray-500 hover:bg-gray-100 rounded-full">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+        </button>
+    </div>
+
+    <!-- MAIN CONTAINER -->
+    <div class="container mx-auto px-0 md:px-4 py-0 md:py-4 h-full">
         <!-- Flex container for Layout -->
         <div class="flex flex-col md:flex-row gap-6 h-full">
             
-            <!-- Sidebar / Settings Panel -->
-            <div class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4 md:h-full overflow-y-auto">
+            <!-- ========================================== -->
+            <!-- SIDEBAR (Visible Desktop, Hidden Mobile)   -->
+            <!-- ========================================== -->
+            <!-- Added 'hidden md:flex' to hide on mobile but keep structure for desktop -->
+            <div class="hidden md:flex w-80 flex-shrink-0 flex-col gap-4 h-full overflow-y-auto">
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
                     <div class="mb-4">
                         <h1 class="text-2xl font-bold text-gray-900">DeepTranscribe</h1>
@@ -55,6 +100,7 @@
                     </div>
 
                     <!-- Primary Control (Toggle Button) -->
+                    <!-- IMPORTANT: IDs here are used by transcribe.js -->
                     <div class="mb-6">
                         <label class="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Recording State</label>
                         <button id="recording-toggle" type="button" class="w-full flex p-1 bg-gray-100 rounded-xl border border-gray-200 hover:border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -73,17 +119,16 @@
                         </button>
                     </div>
 
-                    <!-- Hidden old buttons for JS compatibility or we update JS -->
                     <button id="start-recording" class="hidden"></button>
                     <button id="stop-recording" class="hidden"></button>
 
-                    <!-- Visualizer (Mini) -->
+                    <!-- Visualizer -->
                     <div class="mb-6 bg-gray-900 rounded-xl overflow-hidden h-16 flex items-center justify-center shadow-inner relative group">
                         <canvas id="audio-visualizer" class="w-full h-full opacity-80"></canvas>
                         <div class="absolute inset-0 pointer-events-none shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]"></div>
                     </div>
 
-                    <!-- Configuration - Collapsible on Mobile, Expanded on Desktop -->
+                    <!-- Configuration -->
                     <details class="group md:open" open>
                         <summary class="flex justify-between items-center font-medium cursor-pointer list-none text-sm text-gray-600 hover:text-gray-900 transition-colors mb-2">
                             <span>Configuration</span>
@@ -100,14 +145,12 @@
                             <div>
                                 <label for="model" class="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Model</label>
                                 <select id="model" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                                    <!-- Populated by JS -->
                                 </select>
                             </div>
 
                             <div>
                                 <label for="language" class="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Language</label>
                                 <select id="language" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                                    <!-- Populated by JS -->
                                 </select>
                             </div>
 
@@ -134,10 +177,12 @@
                 </div>
             </div>
 
-            <!-- Main Transcript Area -->
-            <div class="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden h-full relative">
-                <!-- Header -->
-                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-sm z-10 sticky top-0">
+            <!-- ========================================== -->
+            <!-- TRANSCRIPT AREA (Shared)                   -->
+            <!-- ========================================== -->
+            <div class="flex-1 flex flex-col bg-white md:rounded-2xl md:shadow-sm md:border md:border-gray-100 overflow-hidden h-full relative mt-14 md:mt-0 mb-20 md:mb-0">
+                <!-- Header (Hidden on Mobile, Visible on Desktop) -->
+                <div class="hidden md:flex px-6 py-4 border-b border-gray-100 justify-between items-center bg-white/80 backdrop-blur-sm z-10 sticky top-0">
                     <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
@@ -153,20 +198,19 @@
                 </div>
 
                 <!-- Error Toast -->
-                <div id="error-message" class="hidden absolute top-16 left-4 right-4 z-20 p-4 bg-red-50 text-red-700 rounded-xl border border-red-100 flex items-start shadow-md animate-bounce">
+                <div id="error-message" class="hidden absolute top-4 left-4 right-4 z-20 p-4 bg-red-50 text-red-700 rounded-xl border border-red-100 flex items-start shadow-md animate-bounce">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 001 1h2a1 1 0 001-1V6a1 1 0 00-1-1H10z" clip-rule="evenodd" />
                     </svg>
                     <span class="error-text"></span>
                 </div>
 
-                <!-- Chat/Transcript Area Wrapper -->
+                <!-- Chat/Transcript Wrapper -->
                 <div class="relative flex-1 overflow-hidden bg-gray-50/50">
-                    <!-- Actual Container for Messages -->
-                    <div id="transcript-container" class="absolute inset-0 overflow-y-auto p-4 md:p-6 space-y-4 scroll-smooth pb-20">
+                    <div id="transcript-container" class="absolute inset-0 overflow-y-auto p-4 md:p-6 space-y-4 scroll-smooth">
                     </div>
 
-                    <!-- Empty State Overlay -->
+                    <!-- Empty State -->
                     <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-8 text-center pointer-events-none transition-opacity duration-300">
                         <div class="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -175,7 +219,7 @@
                         </div>
                         <h3 class="text-xl font-semibold text-gray-700 mb-2">Ready to Transcribe</h3>
                         <p class="text-sm text-gray-500 max-w-sm">
-                            Configure your settings in the sidebar and click <span class="font-semibold text-indigo-600">Record</span> to start converting speech to text in real-time.
+                            Click <span class="font-semibold text-indigo-600">Record</span> to start converting speech to text in real-time.
                         </p>
                     </div>
                 </div>
@@ -183,25 +227,165 @@
             
         </div>
     </div>
+
+    <!-- ========================================== -->
+    <!-- MOBILE BOTTOM BAR (Action Controls)        -->
+    <!-- ========================================== -->
+    <div class="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-white border-t border-gray-200 px-6 flex items-center justify-between z-30 shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
+        <div class="w-16 text-xs text-gray-400 font-mono" id="mobile-timer">00:00</div>
+        
+        <!-- FAB: Proxies click to Desktop Button -->
+        <button id="mobile-fab" class="h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center -translate-y-4 hover:scale-105 active:scale-95 transition-all focus:outline-none">
+            <svg id="mob-icon-mic" xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 10 0 2h8a1 1 0 10 0-2h-3v-2.07z" clip-rule="evenodd" />
+            </svg>
+            <svg id="mob-icon-stop" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" clip-rule="evenodd" />
+            </svg>
+        </button>
+
+        <div class="w-16 flex justify-end"></div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MOBILE SETTINGS DRAWER                     -->
+    <!-- ========================================== -->
+    <div id="mobile-overlay" class="md:hidden fixed inset-0 bg-black/50 z-40 hidden opacity-0"></div>
+    
+    <div id="mobile-drawer" class="md:hidden fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-50 p-6 drawer-closed max-h-[85vh] overflow-y-auto">
+        <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6"></div>
+        <h3 class="text-lg font-bold text-gray-900 mb-4">Transcription Settings</h3>
+        
+        <!-- We clone the form inputs here or use JS to sync. For simplicity, we just guide user -->
+        <!-- Note: Real functionality binds to the hidden desktop inputs. This is a proxy view. -->
+        <!-- To make this work without complex JS syncing, we'd typically move the form out. -->
+        <!-- However, given constraints, we will rely on JS to move the configuration block here on mobile or hide sidebar. -->
+        <!-- SIMPLE FIX: On mobile, we actually show the same inputs, but styled inside this drawer. -->
+        <!-- Since IDs must be unique, we will use JS to move the 'details' block into this drawer on Mobile, and back to sidebar on Desktop? -->
+        <!-- Safer approach: Just tell user to rotate or use desktop for advanced settings, OR duplicate inputs with different IDs and sync logic. -->
+        <!-- CURRENT APPROACH: Simple JS to move the Configuration Container. -->
+        
+        <div id="mobile-config-container">
+            <!-- JS will move the desktop configuration block here on mobile open -->
+        </div>
+
+        <button id="mobile-drawer-close" class="w-full mt-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl">Done</button>
+    </div>
+
 </div>
 
-<!-- Inline script for specific UI interactions -->
+<!-- Logic to handle Mobile Interactions -->
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const statusDot = document.getElementById('status-indicator');
-        const badge = document.getElementById('recording-badge');
-        const emptyState = document.getElementById('empty-state');
+        // --- 1. Empty State Logic ---
         const container = document.getElementById('transcript-container');
-        
-        // Hide empty state when content arrives
-        const observer = new MutationObserver((mutations) => {
-             if (container.children.length > 0) {
-                 emptyState.style.opacity = '0';
-             } else {
-                 emptyState.style.opacity = '1';
-             }
+        const emptyState = document.getElementById('empty-state');
+        const observer = new MutationObserver(() => {
+             if (container.children.length > 0) emptyState.style.opacity = '0';
+             else emptyState.style.opacity = '1';
         });
         observer.observe(container, { childList: true });
+
+        // --- 2. Sync Mobile FAB with Desktop Toggle ---
+        const desktopToggle = document.getElementById('recording-toggle');
+        const mobileFab = document.getElementById('mobile-fab');
+        const mobileMic = document.getElementById('mob-icon-mic');
+        const mobileStop = document.getElementById('mob-icon-stop');
+        const mobileStatusText = document.getElementById('mobile-status-text');
+        const mobileStatusDot = document.getElementById('mobile-status-dot');
+        const mobileTimer = document.getElementById('mobile-timer');
+        let timerInterval;
+
+        // Proxy Click
+        mobileFab.addEventListener('click', () => {
+            desktopToggle.click();
+        });
+
+        // Watch for status changes
+        const statusObserver = new MutationObserver(() => {
+            const statusText = document.getElementById('status').innerText.toLowerCase();
+            const isRecording = statusText.includes('recording') || statusText.includes('listening');
+
+            if (isRecording) {
+                // Active State
+                mobileFab.classList.add('mobile-recording-active', 'bg-red-500');
+                mobileFab.classList.remove('bg-indigo-600');
+                mobileMic.classList.add('hidden');
+                mobileStop.classList.remove('hidden');
+                
+                mobileStatusDot.classList.remove('bg-gray-400');
+                mobileStatusDot.classList.add('bg-red-500', 'animate-pulse');
+                mobileStatusText.innerText = "Recording";
+                mobileStatusText.classList.add('text-red-600');
+
+                // Start Timer
+                let sec = 0;
+                clearInterval(timerInterval);
+                timerInterval = setInterval(() => {
+                    sec++;
+                    let m = Math.floor(sec/60).toString().padStart(2,'0');
+                    let s = (sec%60).toString().padStart(2,'0');
+                    mobileTimer.innerText = `${m}:${s}`;
+                }, 1000);
+
+            } else {
+                // Idle State
+                mobileFab.classList.remove('mobile-recording-active', 'bg-red-500');
+                mobileFab.classList.add('bg-indigo-600');
+                mobileMic.classList.remove('hidden');
+                mobileStop.classList.add('hidden');
+
+                mobileStatusDot.classList.add('bg-gray-400');
+                mobileStatusDot.classList.remove('bg-red-500', 'animate-pulse');
+                mobileStatusText.innerText = "Ready";
+                mobileStatusText.classList.remove('text-red-600');
+
+                clearInterval(timerInterval);
+                mobileTimer.innerText = "00:00";
+            }
+        });
+        statusObserver.observe(document.getElementById('status'), { childList: true, characterData: true, subtree: true });
+
+        // --- 3. Mobile Settings Drawer Logic ---
+        const drawer = document.getElementById('mobile-drawer');
+        const overlay = document.getElementById('mobile-overlay');
+        const openBtn = document.getElementById('mobile-settings-btn');
+        const closeBtn = document.getElementById('mobile-drawer-close');
+        
+        // This is a hacky but effective way to handle unique IDs on mobile vs desktop
+        // We move the configuration block in DOM when opening drawer
+        const configBlock = document.querySelector('details'); 
+        const desktopParent = configBlock.parentElement;
+        const mobileParent = document.getElementById('mobile-config-container');
+
+        function toggleDrawer(open) {
+            if(open) {
+                // Move config to mobile drawer
+                mobileParent.appendChild(configBlock);
+                configBlock.open = true; // Force open settings
+                
+                overlay.classList.remove('hidden');
+                requestAnimationFrame(() => {
+                    overlay.classList.remove('opacity-0');
+                    drawer.classList.remove('drawer-closed');
+                    drawer.classList.add('drawer-open');
+                });
+            } else {
+                // Move config back to desktop sidebar
+                desktopParent.appendChild(configBlock);
+                
+                drawer.classList.remove('drawer-open');
+                drawer.classList.add('drawer-closed');
+                overlay.classList.add('opacity-0');
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 300);
+            }
+        }
+
+        openBtn.addEventListener('click', () => toggleDrawer(true));
+        closeBtn.addEventListener('click', () => toggleDrawer(false));
+        overlay.addEventListener('click', () => toggleDrawer(false));
     });
 </script>
 {% endblock %}
