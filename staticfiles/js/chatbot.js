@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Create floating circular button
   const floatButton = document.createElement('button');
   floatButton.id = 'chatbot-float-button';
-  floatButton.textContent = '💬';
+  floatButton.textContent = 'Ⓜ️';
   floatButton.title = 'Open Chatbot';
   floatButton.style.position = 'fixed';
   floatButton.style.bottom = '20px';
@@ -127,13 +127,38 @@ document.addEventListener('DOMContentLoaded', () => {
     messagesContainer.innerHTML = '';
   }
 
+  // Basic Markdown parser
+  function parseMarkdown(text) {
+    // Bold: **text**
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Italic: *text*
+    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    // Code inline: `code`
+    text = text.replace(/`(.*?)`/g, '<code>$1</code>');
+    // Code block: ```code```
+    text = text.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    // Links: [text](url)
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    // Headers: # ## ###
+    text = text.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+    text = text.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+    text = text.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+    // Lists: - item or * item
+    text = text.replace(/^\- (.*$)/gim, '<li>$1</li>');
+    text = text.replace(/^\* (.*$)/gim, '<li>$1</li>');
+    // Wrap consecutive <li> in <ul>
+    text = text.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+    return text;
+  }
+
   // Add message to chat window with alignment and bubble style
   function addMessage(text, sender) {
     const messageDiv = document.createElement('div');
     messageDiv.style.marginBottom = '10px';
     messageDiv.style.padding = '8px 12px';
     messageDiv.style.borderRadius = '15px';
-    messageDiv.style.maxWidth = '80%';
+    messageDiv.style.maxWidth = '100%';
+    messageDiv.style.fontSize = '14px';
     messageDiv.style.wordWrap = 'break-word';
     messageDiv.style.whiteSpace = 'pre-wrap';
     messageDiv.style.display = 'inline-block';
@@ -152,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
       messageDiv.style.borderBottomLeftRadius = '0';
     }
 
-    messageDiv.textContent = text;
+    messageDiv.innerHTML = parseMarkdown(text);
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
@@ -183,15 +208,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const data = await response.json();
-      // Delay hiding typing indicator to test visibility
-      setTimeout(() => {
-        hideTypingIndicator();
-        if (data.error) {
-          addMessage('Error: ' + data.error, 'bot');
-        } else {
-          addMessage(data.response, 'bot');
-        }
-      }, 1000);
+      hideTypingIndicator();
+      if (data.error) {
+        addMessage('Error: ' + data.error, 'bot');
+      } else {
+        addMessage(data.response, 'bot');
+      }
     } catch (error) {
       hideTypingIndicator();
       addMessage('Error: ' + error.message, 'bot');

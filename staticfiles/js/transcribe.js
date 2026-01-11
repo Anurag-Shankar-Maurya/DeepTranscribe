@@ -42,22 +42,30 @@ class TranscriptionManager {
   setupWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/transcribe/`;
+    console.log(`→ Connecting to WebSocket at: ${wsUrl}`);
 
     this.socket = new WebSocket(wsUrl);
 
     this.socket.onopen = () => {
-      console.log('WebSocket connection established');
+      console.log('✓ WebSocket connection established');
       this.updateStatus('WebSocket connected');
     };
 
     this.socket.onclose = (event) => {
-      console.log('WebSocket connection closed', event);
+      console.log(`✗ WebSocket closed - Code: ${event.code}, Reason: ${event.reason}`);
       this.updateStatus('WebSocket disconnected');
-      this.stopRecording();
+      if (this.isRecording) {
+        this.stopRecording();
+      }
+      // Try to reconnect after 3 seconds
+      setTimeout(() => {
+        console.log('→ Attempting to reconnect...');
+        this.setupWebSocket();
+      }, 3000);
     };
 
     this.socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error('✗ WebSocket error:', error);
       this.updateStatus('WebSocket error');
     };
 
@@ -69,19 +77,33 @@ class TranscriptionManager {
   handleWebSocketMessage(event) {
     try {
       const data = JSON.parse(event.data);
+      console.log('← Received from server:', data.type || data.status || data.error);
 
       if (data.error) {
+        console.error('✗ Server error:', data.error);
         this.showError(data.error);
         return;
       }
 
       if (data.status === 'transcription_started') {
         this.transcriptId = data.transcript_id;
+        this.transcriptionStarted = true;
+        console.log('✓ Transcription started on server');
         this.updateStatus('Transcription started');
+        // Resolve the promise if waiting
+        if (this._transcriptionStartResolver) {
+          this._transcriptionStartResolver();
+          this._transcriptionStartResolver = null;
+        }
       } else if (data.status === 'transcription_stopped') {
+        this.transcriptionStarted = false;
+        console.log('✓ Transcription stopped');
         this.updateStatus('Transcription stopped');
       } else if (data.type === 'transcript_segment') {
+        console.log(`✓ Received transcript segment: "${data.text.substring(0, 50)}"${data.text.length > 50 ? '...' : ''}`);
         this.displayTranscriptSegment(data);
+      } else {
+        console.log('? Unknown message type:', data);
       }
     } catch (error) {
       console.error('Error parsing WebSocket message:', error);
@@ -91,7 +113,19 @@ class TranscriptionManager {
   async startRecording() {
     if (this.isRecording) return;
 
+    // Check if WebSocket is connected
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      console.error('✗ WebSocket not connected, state:', this.socket?.readyState);
+      this.showError('WebSocket not connected. Trying to reconnect...');
+      this.setupWebSocket();
+      return;
+    }
+
     try {
+      // Get the actual sample rate from AudioContext FIRST
+      const sampleRate = this.audioContext.sampleRate;
+      console.log(`→ AudioContext sample rate: ${sampleRate} Hz`);
+
       // Get title from input
       const title = document.getElementById('transcript-title').value || 'Untitled Transcript';
 
@@ -103,27 +137,72 @@ class TranscriptionManager {
         punctuate: document.getElementById('punctuate').checked,
         numerals: document.getElementById('numerals').checked,
         smart_format: document.getElementById('smart_format').checked,
+        sample_rate: sampleRate,  // Include actual sample rate
+        channels: 1,
+        encoding: 'linear16'
       };
 
+      // Resume AudioContext if suspended (required by Chrome autoplay policy)
+      if (this.audioContext.state === 'suspended') {
+        console.log('→ Resuming AudioContext...');
+        await this.audioContext.resume();
+        console.log('✓ AudioContext resumed');
+      }
+
       // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('→ Requesting microphone access...');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true
+        } 
+      });
+      console.log('✓ Microphone access granted');
+
+      // Create a flag to track transcription started
+      this.transcriptionStarted = false;
+
+      // Create a promise that resolves when transcription starts
+      const startPromise = new Promise((resolve) => {
+        this._transcriptionStartResolver = resolve;
+      });
 
       // Start transcription on the server
+      console.log('→ Sending start_transcription command');
       this.socket.send(JSON.stringify({
         command: 'start_transcription',
         title: title,
         settings: settings
       }));
 
-      // Set up audio processing
+      // Update UI state immediately so user sees feedback
+      this.isRecording = true;
+      this.updateButtonState();
+      this.updateStatus('Connecting to transcription service...');
+
+      // Set up audio processing BEFORE waiting for server
       const audioSource = this.audioContext.createMediaStreamSource(stream);
       const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
+      // Connect audio source to processor
       audioSource.connect(processor);
-      processor.connect(this.audioContext.destination);
+      // Connect to destination to keep the audio graph active
+      // (Set volume to 0 via GainNode to avoid feedback)
+      const gainNode = this.audioContext.createGain();
+      gainNode.gain.value = 0; // Mute the output
+      processor.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
 
+      let audioChunksCount = 0;
       processor.onaudioprocess = (e) => {
-        if (!this.isRecording) return;
+        if (!this.isRecording) {
+          return;
+        }
+
+        if (!this.transcriptionStarted) {
+          // Still waiting for server confirmation
+          return;
+        }
 
         // Get audio data
         const inputData = e.inputBuffer.getChannelData(0);
@@ -132,16 +211,27 @@ class TranscriptionManager {
         const pcmData = this.floatTo16BitPCM(inputData);
 
         // Send audio data to server
-        this.socket.send(pcmData);
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+          this.socket.send(pcmData);
+          audioChunksCount++;
+          if (audioChunksCount === 1) {
+            console.log('✓ First audio chunk sent');
+          } else if (audioChunksCount % 10 === 0) {
+            console.log(`→ Sent ${audioChunksCount} audio chunks (${pcmData.byteLength} bytes each)`);
+          }
+        } else {
+          console.warn('WebSocket not open, cannot send audio');
+        }
       };
+
+      // Wait for transcription to start
+      await startPromise;
+      console.log('✓ Server confirmed transcription started, audio will now flow');
 
       // Set up media recorder for visualizations
       this.mediaRecorder = new MediaRecorder(stream);
       this.mediaRecorder.start();
 
-      // Update UI state
-      this.isRecording = true;
-      this.updateButtonState();
       this.updateStatus('Recording...');
       this.startVisualization(stream);
 
@@ -150,7 +240,9 @@ class TranscriptionManager {
 
     } catch (error) {
       console.error('Error starting recording:', error);
-      this.showError('Could not access microphone');
+      this.isRecording = false;
+      this.updateButtonState();
+      this.showError('Could not access microphone: ' + error.message);
     }
   }
 
@@ -177,16 +269,42 @@ class TranscriptionManager {
   }
 
   updateButtonState() {
-    const startBtn = document.getElementById('start-recording');
-    const stopBtn = document.getElementById('stop-recording');
+    const recordPart = document.getElementById('record-part');
+    const stopPart = document.getElementById('stop-part');
+    const statusDot = document.getElementById('status-indicator');
+    const badge = document.getElementById('recording-badge');
 
     if (this.isRecording) {
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
+      if (recordPart) {
+        recordPart.className = 'flex-1 flex items-center justify-center py-2.5 text-sm font-bold text-gray-500 rounded-lg transition-all';
+      }
+      if (stopPart) {
+        stopPart.className = 'flex-1 flex items-center justify-center py-2.5 text-sm font-bold bg-white text-red-600 rounded-lg shadow-sm transition-all';
+      }
+      if (statusDot) {
+        statusDot.classList.remove('bg-gray-400');
+        statusDot.classList.add('bg-red-500', 'animate-pulse');
+      }
+      if (badge) badge.classList.remove('hidden');
     } else {
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
+      if (recordPart) {
+        recordPart.className = 'flex-1 flex items-center justify-center py-2.5 text-sm font-bold bg-indigo-600 text-white rounded-lg shadow-md transition-all';
+      }
+      if (stopPart) {
+        stopPart.className = 'flex-1 flex items-center justify-center py-2.5 text-sm font-bold text-gray-500 rounded-lg transition-all';
+      }
+      if (statusDot) {
+        statusDot.classList.remove('bg-red-500', 'animate-pulse');
+        statusDot.classList.add('bg-gray-400');
+      }
+      if (badge) badge.classList.add('hidden');
     }
+    
+    // Maintain hidden button states for any legacy listeners
+    const startBtn = document.getElementById('start-recording');
+    const stopBtn = document.getElementById('stop-recording');
+    if (startBtn) startBtn.disabled = this.isRecording;
+    if (stopBtn) stopBtn.disabled = !this.isRecording;
   }
 
   updateStatus(message) {
@@ -205,42 +323,51 @@ class TranscriptionManager {
 
   displayTranscriptSegment(data) {
     const container = document.getElementById('transcript-container');
-
-    // Check if there's already a segment for this speaker
+    
+    // Create new speaker div (message bubble)
     const speakerId = data.speaker !== null ? data.speaker : 'unknown';
-    const speakerSelector = `[data-speaker="${speakerId}"]`;
-    let speakerDiv = container.querySelector(speakerSelector);
+    
+    // Create wrapper for alignment
+    const messageWrapper = document.createElement('div');
+    messageWrapper.className = 'flex flex-col mb-4 ' + (data.is_user ? 'items-end' : 'items-start');
+    
+    const bubble = document.createElement('div');
+    // Base styles for bubble
+    bubble.className = 'max-w-[85%] rounded-2xl p-4 shadow-sm relative';
+    
+    // Assign color based on speaker ID (or specific style for user if applicable)
+    // For now, using the randomized colors for speakers
+    const colorIndex = data.speaker !== null ? (data.speaker % this.speakerColors.length) : 0;
+    const speakerColor = this.speakerColors[colorIndex];
+    
+    // Style the bubble
+    // We'll use a light background with a colored border/accent
+    bubble.style.backgroundColor = 'white';
+    bubble.style.borderLeft = `4px solid ${speakerColor}`;
+    bubble.style.borderTopLeftRadius = '4px'; // Distinctive edge
+    
+    // Add speaker label
+    const speakerLabel = document.createElement('div');
+    speakerLabel.className = 'text-xs font-bold mb-1 uppercase tracking-wider opacity-75';
+    speakerLabel.textContent = data.speaker !== null ? `Speaker ${data.speaker}` : 'Unidentified Speaker';
+    speakerLabel.style.color = speakerColor;
+    bubble.appendChild(speakerLabel);
 
-    if (!speakerDiv) {
-      // Create new speaker div
-      speakerDiv = document.createElement('div');
-      speakerDiv.className = 'mb-4 p-4 rounded-lg';
-      speakerDiv.dataset.speaker = speakerId;
-
-      // Assign color based on speaker ID
-      const colorIndex = data.speaker !== null ? (data.speaker % this.speakerColors.length) : 0;
-      const speakerColor = this.speakerColors[colorIndex];
-      speakerDiv.style.backgroundColor = `${speakerColor}15`; // 15% opacity
-      speakerDiv.style.borderLeft = `4px solid ${speakerColor}`;
-
-      // Add speaker label
-      const speakerLabel = document.createElement('div');
-      speakerLabel.className = 'font-semibold text-sm mb-1';
-      speakerLabel.textContent = data.speaker !== null ? `Speaker ${data.speaker}` : 'Unidentified Speaker';
-      speakerLabel.style.color = speakerColor;
-      speakerDiv.appendChild(speakerLabel);
-
-      // Add text container
-      const textContainer = document.createElement('div');
-      textContainer.className = 'text-content';
-      speakerDiv.appendChild(textContainer);
-
-      container.appendChild(speakerDiv);
-    }
-
-    // Update or add text
-    const textContent = speakerDiv.querySelector('.text-content');
+    // Add text content
+    const textContent = document.createElement('div');
+    textContent.className = 'text-gray-800 leading-relaxed text-base';
     textContent.textContent = data.text;
+    bubble.appendChild(textContent);
+    
+    // Add timestamp if available (or current time)
+    const timeLabel = document.createElement('div');
+    timeLabel.className = 'text-xs text-gray-400 mt-2 text-right';
+    const now = new Date();
+    timeLabel.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    bubble.appendChild(timeLabel);
+
+    messageWrapper.appendChild(bubble);
+    container.appendChild(messageWrapper);
 
     // Scroll to bottom
     container.scrollTop = container.scrollHeight;
@@ -328,6 +455,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('stop-recording').addEventListener('click', () => {
     transcriptionManager.stopRecording();
   });
+
+  // Handle recording toggle
+  const toggleBtn = document.getElementById('recording-toggle');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      if (transcriptionManager.isRecording) {
+        transcriptionManager.stopRecording();
+      } else {
+        transcriptionManager.startRecording();
+      }
+    });
+  }
   
   // Fetch available models and languages
   fetch('/api/settings/')
