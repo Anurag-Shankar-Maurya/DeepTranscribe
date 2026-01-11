@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "transcriber/wsgi.py": {
-      "runtime": "python",
+      "runtime": "python@3.12",
       "excludeFiles": "staticfiles/** fonts/**"
     }
   },
