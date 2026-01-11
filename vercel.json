@@ -1,10 +1,12 @@
 {
   "version": 2,
-  "functions": {
-    "transcriber/wsgi.py": {
-      "runtime": "@vercel/python"
+  "builds": [
+    {
+      "src": "transcriber/wsgi.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "15mb" }
     }
-  },
+  ],
   "routes": [
     {
       "src": "/(.*)",
