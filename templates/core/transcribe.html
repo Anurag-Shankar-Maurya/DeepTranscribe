@@ -312,7 +312,7 @@
                 mobileFab.classList.remove('bg-indigo-600');
                 mobileMic.classList.add('hidden');
                 mobileStop.classList.remove('hidden');
-                
+
                 mobileStatusDot.classList.remove('bg-gray-400');
                 mobileStatusDot.classList.add('bg-red-500', 'animate-pulse');
                 mobileStatusText.innerText = "Recording";
@@ -342,6 +342,14 @@
 
                 clearInterval(timerInterval);
                 mobileTimer.innerText = "00:00";
+
+                // Prompt for title if not provided
+                if (document.getElementById('transcript-title').value.trim() === '') {
+                    const title = prompt('Please enter a title for this transcript:', '');
+                    if (title && title.trim()) {
+                        document.getElementById('transcript-title').value = title.trim();
+                    }
+                }
             }
         });
         statusObserver.observe(document.getElementById('status'), { childList: true, characterData: true, subtree: true });
